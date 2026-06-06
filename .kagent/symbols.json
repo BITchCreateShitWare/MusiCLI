@@ -11,12 +11,12 @@
     },
     "src/contexts/TerminalContext.tsx": {
       "ipo_ts": 1780723395327,
-      "edit_count": 6,
-      "last_lines": 245,
-      "last_ts": 1780724385773,
+      "edit_count": 8,
+      "last_lines": 251,
+      "last_ts": 1780738016522,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "86b2799d"
+      "last_content_hash": "bdb6379d"
     },
     "node_modules/.tmp/tsconfig.app.tsbuildinfo": {
       "ipo_ts": 1780723420860,
@@ -29,21 +29,21 @@
     },
     "src/commands/handlers.ts": {
       "ipo_ts": 1780723764417,
-      "edit_count": 6,
-      "last_lines": 771,
-      "last_ts": 1780736380954,
+      "edit_count": 8,
+      "last_lines": 825,
+      "last_ts": 1780739942634,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "b29a8be7"
+      "last_content_hash": "b155f30d"
     },
     "dist/index.html": {
       "ipo_ts": 1780723776896,
-      "edit_count": 9,
+      "edit_count": 16,
       "last_lines": 13,
-      "last_ts": 1780736389260,
+      "last_ts": 1780739952659,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "a5baaf54"
+      "last_content_hash": "537e4c46"
     },
     "src/components/InputLine.tsx": {
       "ipo_ts": 1780723931392,
@@ -56,21 +56,21 @@
     },
     "src/i18n/translations.ts": {
       "ipo_ts": 1780724299531,
-      "edit_count": 5,
-      "last_lines": 605,
-      "last_ts": 1780724563900,
+      "edit_count": 11,
+      "last_lines": 635,
+      "last_ts": 1780739934592,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "127c7591"
+      "last_content_hash": "c794f462"
     },
     "src/contexts/PlayerContext.tsx": {
       "ipo_ts": 1780725033995,
-      "edit_count": 8,
-      "last_lines": 428,
-      "last_ts": 1780725565370,
+      "edit_count": 16,
+      "last_lines": 436,
+      "last_ts": 1780739918754,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "168e743"
+      "last_content_hash": "2a4a4b6e"
     },
     "src/App.tsx": {
       "ipo_ts": 1780725113390,
@@ -90,43 +90,117 @@
       "last_source": "onEdit",
       "last_content_hash": "ece7f031"
     },
-    "dist/assets/index-C825IX2L.js": {
-      "ipo_ts": 1780725583894,
-      "edit_count": 1,
-      "last_lines": 33,
-      "last_ts": 1780725583894,
-      "delisted": true,
-      "last_source": "onEdit",
-      "last_content_hash": "b128201f",
-      "delisted_at": 1780735486423,
-      "delist_rounds": 0
-    },
     "src/index.css": {
       "ipo_ts": 1780735582795,
-      "edit_count": 19,
-      "last_lines": 284,
-      "last_ts": 1780736145104,
+      "edit_count": 30,
+      "last_lines": 288,
+      "last_ts": 1780739451642,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "52f8aef4"
+      "last_content_hash": "1c2c53f1"
     },
     "dist/assets/index-CtXmOfF0.css": {
       "ipo_ts": 1780736389251,
-      "edit_count": 1,
+      "edit_count": 2,
       "last_lines": 1,
-      "last_ts": 1780736389251,
+      "last_ts": 1780737831774,
+      "delisted": true,
+      "last_source": "onEdit",
+      "last_content_hash": "6a739d99",
+      "delisted_at": 1780739067143,
+      "delist_rounds": 0
+    },
+    "src/contexts/SettingsContext.tsx": {
+      "ipo_ts": 1780737984221,
+      "edit_count": 32,
+      "last_lines": 352,
+      "last_ts": 1780740345907,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "6a739d99"
+      "last_content_hash": "66511fc"
     },
-    "dist/assets/index-KNQdGx99.js": {
-      "ipo_ts": 1780736389256,
+    "dist/assets/index-CNdzPKgR.js": {
+      "ipo_ts": 1780738202816,
       "edit_count": 1,
       "last_lines": 33,
-      "last_ts": 1780736389256,
+      "last_ts": 1780738202816,
+      "delisted": true,
+      "last_source": "onEdit",
+      "last_content_hash": "90967abf",
+      "delisted_at": 1780739067143,
+      "delist_rounds": 0
+    },
+    "src/types/index.ts": {
+      "ipo_ts": 1780738374014,
+      "edit_count": 2,
+      "last_lines": 109,
+      "last_ts": 1780739890768,
       "delisted": false,
       "last_source": "onEdit",
-      "last_content_hash": "1be08d54"
+      "last_content_hash": "dafee48a"
+    },
+    "src/components/FloatingLyrics.tsx": {
+      "ipo_ts": 1780738444000,
+      "edit_count": 1,
+      "last_lines": 56,
+      "last_ts": 1780738444000,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "ab87385e"
+    },
+    "dist/assets/index-DDCJ6kLc.js": {
+      "ipo_ts": 1780739262379,
+      "edit_count": 1,
+      "last_lines": 33,
+      "last_ts": 1780739262379,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "b7f284ac"
+    },
+    "dist/assets/index-D_62Pjew.css": {
+      "ipo_ts": 1780739262382,
+      "edit_count": 1,
+      "last_lines": 1,
+      "last_ts": 1780739262382,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "77009595"
+    },
+    "dist/assets/index-DvtGqVsa.css": {
+      "ipo_ts": 1780739460582,
+      "edit_count": 1,
+      "last_lines": 1,
+      "last_ts": 1780739460582,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "77b0ee8c"
+    },
+    "dist/assets/index-cUyKDS1H.js": {
+      "ipo_ts": 1780739460588,
+      "edit_count": 1,
+      "last_lines": 33,
+      "last_ts": 1780739460588,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "b7f284ac"
+    },
+    "dist/assets/index-B1BPYjdv.js": {
+      "ipo_ts": 1780739709023,
+      "edit_count": 1,
+      "last_lines": 33,
+      "last_ts": 1780739709023,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "45d646e1"
+    },
+    "dist/assets/index-CACEUzPQ.js": {
+      "ipo_ts": 1780739952655,
+      "edit_count": 1,
+      "last_lines": 33,
+      "last_ts": 1780739952655,
+      "delisted": false,
+      "last_source": "onEdit",
+      "last_content_hash": "ed8a965f"
     }
   }
 }

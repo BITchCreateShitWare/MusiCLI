@@ -13,9 +13,8 @@ export interface MetadataResult {
 }
 
 export interface LyricsUpdateData {
-  prev: string;
   current: string;
-  next: string;
+  next: string[];
 }
 
 export interface LyricsThemeData {
@@ -25,6 +24,11 @@ export interface LyricsThemeData {
   fgDim?: string;
   accent?: string;
   bg?: string;
+  lyricsAccent?: string;
+  lyricsFg?: string;
+  lyricsNextCount?: number;
+  lyricsGap?: number;
+  lyricsShadow?: string;
 }
 
 export interface MusicPlayerAPI {

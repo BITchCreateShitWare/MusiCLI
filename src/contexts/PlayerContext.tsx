@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { PlayMode, LrcLine } from '../types';
-import { getStoredSettings } from './SettingsContext';
+import { getStoredSettings, SHADOW_PRESETS } from './SettingsContext';
 import { parseLRC, getCurrentLineIdx } from '../utils/lrc';
 
 function hasError(obj: unknown): obj is { error: string } {
@@ -71,6 +71,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const lyricsTerminalRef = useRef(false);
   const lyricsFloatingRef = useRef(false);
   const lastPrintedIdxRef = useRef(-1);
+  const lastSentFloatingIdxRef = useRef(-1);
   const shuffleStackRef = useRef<number[]>([]);
   const endedCallbacksRef = useRef<Array<() => void>>([]);
   const lyricPrinterRef = useRef<((text: string, className?: string) => void) | null>(null);
@@ -203,6 +204,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const loadLRC = useCallback(async (mp3Path: string): Promise<boolean> => {
     setLyricsLines([]);
     lastPrintedIdxRef.current = -1;
+    lastSentFloatingIdxRef.current = -1;
 
     const filename = mp3Path.split(/[/\\]/).pop()!.replace(/\.[^.]+$/, '.lrc');
     const lrcPath = mp3Path.replace(/\.[^.]+$/, '.lrc');
@@ -251,7 +253,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (hasError(result)) {
       console.log('[lrc] loadLRC: not found for', mp3Path);
       if (lyricsFloatingRef.current) {
-        window.musicPlayer.sendLyricsUpdate({ prev: '', current: '', next: '' });
+        window.musicPlayer.sendLyricsUpdate({ current: '', next: [] });
       }
       return false;
     }
@@ -263,23 +265,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const sendLyricsToFloating = useCallback((time: number) => {
     if (lyricsLines.length === 0) {
-      window.musicPlayer.sendLyricsUpdate({ prev: '', current: '', next: '' });
+      window.musicPlayer.sendLyricsUpdate({ current: '', next: [] });
       return;
     }
     const curIdx = getCurrentLineIdx(lyricsLines, time);
-    const prev = curIdx > 0 ? lyricsLines[curIdx - 1].text : '';
+    if (curIdx === lastSentFloatingIdxRef.current) return;
+    lastSentFloatingIdxRef.current = curIdx;
     const current = curIdx >= 0 ? lyricsLines[curIdx].text : '';
-    const next = curIdx >= 0 && curIdx < lyricsLines.length - 1 ? lyricsLines[curIdx + 1].text : '';
-    window.musicPlayer.sendLyricsUpdate({ prev, current, next });
+    const count = getStoredSettings().lyricsNextCount || 1;
+    const next: string[] = [];
+    for (let i = 1; i <= count && curIdx + i < lyricsLines.length; i++) {
+      next.push(lyricsLines[curIdx + i].text);
+    }
+    window.musicPlayer.sendLyricsUpdate({ current, next });
   }, [lyricsLines]);
 
   const updateLyrics = useCallback((time: number) => {
     if (lyricsLines.length === 0) return;
-    // Floating: always sync if window is open
     if (lyricsFloatingRef.current) {
       sendLyricsToFloating(time);
     }
-    // Terminal: print new lines as time progresses
     if (lyricsTerminalRef.current) {
       const printFn = lyricPrinterRef.current;
       if (!printFn) return;
@@ -287,14 +292,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       for (let i = lastPrintedIdxRef.current + 1; i < lyricsLines.length; i++) {
         if (lyricsLines[i].time <= time) {
           newIdx = i;
-        } else {
-          break;
-        }
+        } else break;
       }
       if (newIdx > lastPrintedIdxRef.current) {
         for (let i = lastPrintedIdxRef.current + 1; i <= newIdx; i++) {
-          const cls = i === newIdx ? 'lyric' : 'dim';
-          printFn(lyricsLines[i].text, cls);
+          printFn(lyricsLines[i].text, i === newIdx ? 'lyric' : 'dim');
         }
         lastPrintedIdxRef.current = newIdx;
       }
@@ -317,12 +319,30 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     await setLyricsTerminal(!lyricsTerminalRef.current);
   }, [setLyricsTerminal]);
 
-  // Floating lyrics toggle
+  // Floating lyrics toggle (also syncs current theme on open)
   const setLyricsFloating = useCallback(async (v: boolean) => {
     lyricsFloatingRef.current = v;
     setLyricsFloatingState(v);
     if (v) {
       try { await window.musicPlayer.showFloatingLyrics(); } catch {}
+      // Wait for window to load, then send current settings
+      setTimeout(() => {
+        const s = getStoredSettings();
+        const baseFonts = '"Consolas", "Courier New", "Fira Code", monospace';
+        window.musicPlayer.sendLyricsTheme({
+          font: s.customFont ? `"${s.customFont}", ${baseFonts}` : baseFonts,
+          fontSize: s.fontSize || 14,
+          fg: s.fg,
+          fgDim: s['fg-dim'],
+          accent: s.accent,
+          bg: s.bg,
+          lyricsAccent: s.lyricsAccent || '#b1b9f9',
+          lyricsFg: s.lyricsFg || '#cccccc',
+          lyricsNextCount: s.lyricsNextCount || 1,
+          lyricsGap: s.lyricsGap || 10,
+          lyricsShadow: SHADOW_PRESETS[s.lyricsShadow] || SHADOW_PRESETS.medium,
+        });
+      }, 300);
     } else {
       try { await window.musicPlayer.hideFloatingLyrics(); } catch {}
     }

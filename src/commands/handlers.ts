@@ -496,6 +496,8 @@ export function registerAllCommands() {
   register('lyric', ['lyrics', 'lrc'], async (args) => {
     const c = ctx();
     const sub = (args[0] || '').toLowerCase();
+    const rest = args[1];
+
     if (sub === 'f' || sub === 'floating' || sub === 'float' || sub === 'desktop') {
       const wasOn = c.lyricsFloating;
       await c.toggleFloatingLyrics();
@@ -508,6 +510,49 @@ export function registerAllCommands() {
       await c.setLyricsFloating(false);
       await c.setLyricsTerminal(false);
       c.printLine(t('lyricsOff'), 'info');
+    } else if (sub === 'accent') {
+      if (!rest || !/^#[0-9a-fA-F]{3,8}$/.test(rest)) {
+        c.printLine(t('lyricColorUsage'), 'info'); return;
+      }
+      c.saveSettings({ lyricsAccent: rest });
+      c.printLine(t('lyricAccentSet', { hex: rest }), 'success');
+    } else if (sub === 'fg') {
+      if (!rest || !/^#[0-9a-fA-F]{3,8}$/.test(rest)) {
+        c.printLine(t('lyricColorUsage'), 'info'); return;
+      }
+      c.saveSettings({ lyricsFg: rest });
+      c.printLine(t('lyricFgSet', { hex: rest }), 'success');
+    } else if (sub === 'next') {
+      const n = parseInt(rest, 10);
+      if (isNaN(n) || n < 0 || n > 20) {
+        c.printLine(t('lyricNextSet', { v: getStoredSettings().lyricsNextCount || 1 }), 'info');
+        return;
+      }
+      c.saveSettings({ lyricsNextCount: n });
+      c.printLine(t('lyricNextSet', { v: n }), 'success');
+    } else if (sub === 'gap') {
+      const g = parseInt(rest, 10);
+      if (isNaN(g) || g < 0 || g > 100) {
+        c.printLine(t('lyricGapSet', { v: getStoredSettings().lyricsGap || 10 }), 'info');
+        return;
+      }
+      c.saveSettings({ lyricsGap: g });
+      c.printLine(t('lyricGapSet', { v: g }), 'success');
+    } else if (sub === 'shadow') {
+      const val = (rest || '').toLowerCase();
+      if (val === 'off' || val === 'none') {
+        c.saveSettings({ lyricsShadow: 'none' });
+        c.printLine(t('lyricShadowOff'), 'success');
+      } else if (val === 'small' || val === 's') {
+        c.saveSettings({ lyricsShadow: 'small' });
+        c.printLine(t('lyricShadowSet', { v: 'small' }), 'success');
+      } else if (val === 'large' || val === 'l') {
+        c.saveSettings({ lyricsShadow: 'large' });
+        c.printLine(t('lyricShadowSet', { v: 'large' }), 'success');
+      } else {
+        c.saveSettings({ lyricsShadow: 'medium' });
+        c.printLine(t('lyricShadowSet', { v: 'medium' }), 'success');
+      }
     } else if (!sub) {
       const wasOn = c.lyricsTerminal;
       await c.toggleTerminalLyrics();
@@ -550,6 +595,15 @@ export function registerAllCommands() {
     else if (sub === 'bg' || sub === 'background') await handleBg(rest);
     else if (sub === 'blur') handleBlur(rest);
     else if (sub === 'font') await handleFont(rest);
+    else if (sub === 'maxlines') {
+      const v = parseInt(rest[0], 10);
+      if (isNaN(v) || v < 100 || v > 5000) {
+        c.printLine(t('maxlinesUsage', { v: getStoredSettings().maxLines || 500 }), 'info');
+        return;
+      }
+      c.saveSettings({ maxLines: v });
+      c.printLine(t('maxlinesSet', { v }), 'success');
+    }
     else c.printLine(t('setUsage'), 'info');
   }, 'helpSet');
 

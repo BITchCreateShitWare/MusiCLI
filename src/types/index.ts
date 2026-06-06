@@ -23,11 +23,17 @@ export interface AppSettings {
   customFontData: string;
   lyricsTerminal: boolean;
   lyricsFloating: boolean;
+  lyricsFg: string;
+  lyricsAccent: string;
+  lyricsNextCount: number;
+  lyricsGap: number;
+  lyricsShadow: 'none' | 'small' | 'medium' | 'large';
   progressFilled: string;
   progressEmpty: string;
   progressWidth: number;
   seekStep: number;
   seekPause: boolean;
+  maxLines: number;
 }
 
 export interface Theme {

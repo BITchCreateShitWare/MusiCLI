@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 
-interface LyricsLine {
-  prev: string;
+interface LyricsState {
   current: string;
-  next: string;
+  next: string[];
 }
 
 export function FloatingLyrics() {
-  const [lines, setLines] = useState<LyricsLine>({ prev: '', current: '', next: '' });
+  const [lines, setLines] = useState<LyricsState>({ current: '', next: [] });
 
   useEffect(() => {
     if (window.musicPlayer?.onLyricsUpdate) {
@@ -24,6 +23,10 @@ export function FloatingLyrics() {
         if (data.fgDim) root.style.setProperty('--fg-dim', data.fgDim);
         if (data.accent) root.style.setProperty('--accent', data.accent);
         if (data.bg) root.style.setProperty('--bg', data.bg);
+        if (data.lyricsAccent) root.style.setProperty('--lyrics-accent', data.lyricsAccent);
+        if (data.lyricsFg) root.style.setProperty('--lyrics-fg', data.lyricsFg);
+        if (data.lyricsGap != null) root.style.setProperty('--lyrics-gap', data.lyricsGap + 'px');
+        if (data.lyricsShadow) root.style.setProperty('--lyrics-shadow', data.lyricsShadow);
       });
     }
   }, []);
@@ -39,9 +42,14 @@ export function FloatingLyrics() {
       </button>
       <div id="drag-area">
         <div id="lyrics-container">
-          <div className="lyric-line prev" id="line-prev">{lines.prev}</div>
-          <div className="lyric-line current" id="line-current">{lines.current || '♪'}</div>
-          <div className="lyric-line next" id="line-next">{lines.next}</div>
+          <div className="lyric-line current" id="line-current">
+            {lines.current || '♪'}
+          </div>
+          {lines.next.map((text, i) => (
+            <div key={i} className="lyric-line next" style={{ opacity: 1 - i * 0.15 }}>
+              {text}
+            </div>
+          ))}
         </div>
       </div>
     </>

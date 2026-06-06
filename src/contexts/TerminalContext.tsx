@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import type { OutputLine, SelectCandidate, InteractiveItem } from '../types';
 
 type InteractiveMode = 'import' | 'track-pl' | null;
+import { getStoredSettings } from './SettingsContext';
 import { escapeHtml } from '../utils/format';
 import { t } from '../i18n';
 
@@ -73,12 +74,17 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   // Keep ref in sync with state so moveCursor can read latest value
   useEffect(() => { itemsRef.current = items; }, [items]);
 
+  const trimExcess = (arr: OutputLine[]): OutputLine[] => {
+    const max = getStoredSettings().maxLines || 500;
+    return arr.length > max ? arr.slice(arr.length - max) : arr;
+  };
+
   const printLine = useCallback((text: string, className = '') => {
-    setLines(prev => [...prev, { id: nextId++, text, className, raw: false }]);
+    setLines(prev => trimExcess([...prev, { id: nextId++, text, className, raw: false }]));
   }, []);
 
   const printRaw = useCallback((text: string) => {
-    setLines(prev => [...prev, { id: nextId++, text, className: '', raw: true }]);
+    setLines(prev => trimExcess([...prev, { id: nextId++, text, className: '', raw: true }]));
   }, []);
 
   const printKV = useCallback((title: string | null, pairs: [string, string | number | null][]) => {

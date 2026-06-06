@@ -1,7 +1,16 @@
 import type { Lang } from '../types';
 import { LANGS, dict } from './translations';
 
-let currentLang: Lang = 'en';
+// Initialize synchronously — must happen before any t() call
+function initLang(): Lang {
+  try {
+    const saved = localStorage.getItem('musiccli-lang');
+    if (saved && LANGS.includes(saved as Lang)) return saved as Lang;
+  } catch { /* ignore */ }
+  return 'en';
+}
+
+let currentLang: Lang = initLang();
 
 export function t(key: string, vars: Record<string, string | number> = {}): string {
   let text: string = (dict[currentLang]?.[key]) ?? (dict.en[key] ?? key);

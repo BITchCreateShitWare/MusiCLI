@@ -1,10 +1,20 @@
 import { createContext, useContext, useEffect, useCallback, type ReactNode } from 'react';
 import type { AppSettings, Lang, Theme } from '../types';
 import { parseColor, formatColor, darken } from '../utils/color';
-import { loadLang, setLang as i18nSetLang } from '../i18n';
+import { getLang, setLang as i18nSetLang } from '../i18n';
 
 const STORAGE_KEY = 'musiccli-settings';
 const THEMES_KEY = 'musiccli-themes';
+
+export const SHADOW_PRESETS: Record<string, string> = {
+  large: '0 0 8px rgba(0,0,0,0.4),0 4px 3px rgba(0,0,0,0.7)',
+  medium: '0 0 6px rgba(0,0,0,0.5),0 2px 1px rgba(0,0,0,0.5)',
+  small: '0 0 4px rgba(0,0,0,0.7)',
+};
+
+function toCssShadow(preset: string): string {
+  return SHADOW_PRESETS[preset] || 'none';
+}
 
 const defaults: AppSettings = {
   bg: '#0c0c0c',
@@ -26,11 +36,17 @@ const defaults: AppSettings = {
   customFontData: '',
   lyricsTerminal: false,
   lyricsFloating: false,
+  lyricsFg: '#cccccc',
+  lyricsAccent: '#b1b9f9',
+  lyricsNextCount: 1,
+  lyricsGap: 10,
+  lyricsShadow: 'medium',
   progressFilled: '=',
   progressEmpty: ' ',
   progressWidth: 20,
   seekStep: 5,
   seekPause: false,
+  maxLines: 500,
 };
 
 const BUILTIN_THEMES: Theme[] = [
@@ -152,6 +168,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         fgDim: merged['fg-dim'],
         accent: merged.accent,
         bg: merged.bg,
+        lyricsAccent: merged.lyricsAccent || '#b1b9f9',
+        lyricsFg: merged.lyricsFg || '#cccccc',
+        lyricsNextCount: merged.lyricsNextCount || 1,
+        lyricsGap: merged.lyricsGap || 10,
+        lyricsShadow: toCssShadow(merged.lyricsShadow || 'medium'),
       });
     }
   }, []);
@@ -275,7 +296,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   // Initialize on mount
   useEffect(() => {
-    loadLang();
     let stored: Partial<AppSettings> = {};
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -292,10 +312,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return i18nSetLang(lang);
   }, []);
 
-  const currentLang = (() => {
-    const saved = localStorage.getItem('musiccli-lang');
-    return (saved && ['en', 'zh', 'ja'].includes(saved)) ? saved as Lang : 'en' as Lang;
-  })();
+  const currentLang = getLang();
 
   return (
     <SettingsContext.Provider value={{
