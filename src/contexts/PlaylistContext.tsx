@@ -1,9 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { Playlist, PlaylistInfo } from '../types';
 import { t } from '../i18n';
-
-const PL_STORAGE_KEY = 'musiccli-playlists';
-const PL_CURRENT_KEY = 'musiccli-current-pl';
+import { getPlaylists as getPlaylistsFromStore, savePlaylists as savePlaylistsToStore } from '../configStore';
 
 // Callbacks that PlaylistContext needs from PlayerContext
 export interface PlayerSync {
@@ -33,6 +31,7 @@ interface PlaylistContextValue {
   syncTrackToPlaylists: (trackPath: string, names: string[]) => void;
   savePlaylists: () => void;
   ensureDefault: () => void;
+  reloadFromStore: () => void;
 }
 
 const PlaylistContext = createContext<PlaylistContextValue | null>(null);
@@ -42,25 +41,18 @@ function defaultPlaylistName(): string {
 }
 
 function loadPlaylistsFromStorage(): { pls: Record<string, Playlist>; cur: string } {
-  let pls: Record<string, Playlist> = {};
-  try {
-    const raw = localStorage.getItem(PL_STORAGE_KEY);
-    if (raw) pls = JSON.parse(raw);
-  } catch { pls = {}; }
-  let cur = '';
-  try {
-    cur = localStorage.getItem(PL_CURRENT_KEY) || '';
-  } catch { cur = ''; }
+  const { pls, cur } = getPlaylistsFromStore();
 
   if (Object.keys(pls).length === 0) {
     const name = defaultPlaylistName();
-    pls[name] = { name, desc: '', createdAt: new Date().toISOString(), tracks: [] };
-    cur = name;
-    localStorage.setItem(PL_STORAGE_KEY, JSON.stringify(pls));
-    localStorage.setItem(PL_CURRENT_KEY, cur);
-  } else if (!pls[cur]) {
-    cur = Object.keys(pls)[0];
-    localStorage.setItem(PL_CURRENT_KEY, cur);
+    const newPls = { [name]: { name, desc: '', createdAt: new Date().toISOString(), tracks: [] } };
+    savePlaylistsToStore(newPls, name);
+    return { pls: newPls, cur: name };
+  }
+  if (!pls[cur]) {
+    const newCur = Object.keys(pls)[0];
+    savePlaylistsToStore(pls, newCur);
+    return { pls, cur: newCur };
   }
   return { pls, cur };
 }
@@ -78,26 +70,36 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
   const persist = useCallback((pls: Record<string, Playlist>, cur: string) => {
     setPlaylists({ ...pls });
     setCurrentPlName(cur);
-    localStorage.setItem(PL_STORAGE_KEY, JSON.stringify(pls));
-    localStorage.setItem(PL_CURRENT_KEY, cur);
+    savePlaylistsToStore(pls, cur);
+  }, []);
+
+  /** Re-read playlists from configStore (e.g. after initConfig loaded files) */
+  const reloadFromStore = useCallback(() => {
+    const { pls, cur } = getPlaylistsFromStore();
+    if (Object.keys(pls).length > 0) {
+      setPlaylists({ ...pls });
+      setCurrentPlName(cur);
+    }
   }, []);
 
   const savePlaylistsFn = useCallback(() => {
-    localStorage.setItem(PL_STORAGE_KEY, JSON.stringify(playlists));
-    localStorage.setItem(PL_CURRENT_KEY, currentPlName);
+    savePlaylistsToStore(playlists, currentPlName);
   }, [playlists, currentPlName]);
 
   const ensureDefault = useCallback(() => {
     const pls = { ...playlists };
     let cur = currentPlName;
+    let changed = false;
     if (Object.keys(pls).length === 0) {
       const name = defaultPlaylistName();
       pls[name] = { name, desc: '', createdAt: new Date().toISOString(), tracks: [] };
       cur = name;
+      changed = true;
     } else if (!pls[cur]) {
       cur = Object.keys(pls)[0];
+      changed = true;
     }
-    persist(pls, cur);
+    if (changed) persist(pls, cur);
   }, [playlists, currentPlName, persist]);
 
   const createPlaylist = useCallback((name: string, desc?: string) => {
@@ -245,7 +247,7 @@ export function PlaylistProvider({ children }: { children: ReactNode }) {
       editPlaylist, getCurrentPlaylist, getCurrentPlName,
       listAllPlaylists, getPlaylistData,
       getPlaylistsForTrack, syncTrackToPlaylists,
-      savePlaylists: savePlaylistsFn, ensureDefault,
+      savePlaylists: savePlaylistsFn, ensureDefault, reloadFromStore,
     }}>
       {children}
     </PlaylistContext.Provider>

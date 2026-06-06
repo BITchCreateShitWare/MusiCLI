@@ -2,9 +2,12 @@ import { createContext, useContext, useEffect, useCallback, type ReactNode } fro
 import type { AppSettings, Lang, Theme } from '../types';
 import { parseColor, formatColor, darken } from '../utils/color';
 import { getLang, setLang as i18nSetLang } from '../i18n';
-
-const STORAGE_KEY = 'musiccli-settings';
-const THEMES_KEY = 'musiccli-themes';
+import {
+  getSettings as getSettingsFromStore,
+  getThemes as getThemesFromStore,
+  saveSettings as saveSettingsToStore,
+  saveThemes as saveThemesToStore,
+} from '../configStore';
 
 export const SHADOW_PRESETS: Record<string, string> = {
   large: '0 0 8px rgba(0,0,0,0.4),0 4px 3px rgba(0,0,0,0.7)',
@@ -89,16 +92,15 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 function loadThemeData(): Theme[] {
-  try {
-    const raw = localStorage.getItem(THEMES_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
+  const themes = getThemesFromStore();
+  if (themes.length > 0) return themes;
+  // First launch: seed built-in themes
   const t = JSON.parse(JSON.stringify(BUILTIN_THEMES));
-  localStorage.setItem(THEMES_KEY, JSON.stringify(t));
+  saveThemesToStore(t);
   return t;
 }
 
-function applyCssVars(s: AppSettings) {
+export function applyCssVars(s: AppSettings) {
   const root = document.documentElement;
   root.style.setProperty('--bg', s.bg);
   root.style.setProperty('--bg-darker', s['bg-darker'] || darken(s.bg, 0.85));
@@ -145,24 +147,15 @@ function applyCssVars(s: AppSettings) {
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  // We use a module-level variable for settings to avoid re-render cascades
-  // since many non-React functions need synchronous access
   const saveSettings = useCallback((partial: Partial<AppSettings>) => {
-    let stored: Partial<AppSettings> = {};
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) stored = JSON.parse(raw);
-    } catch { /* ignore */ }
-    const merged = { ...defaults, ...stored, ...partial };
+    const current = getSettingsFromStore();
+    const merged = { ...defaults, ...current, ...partial };
     if (partial.bg && !partial['bg-darker']) {
       merged['bg-darker'] = darken(partial.bg, 0.85);
     }
     applyCssVars(merged);
-    const toStore: Record<string, unknown> = {};
-    for (const key of Object.keys(defaults)) {
-      toStore[key] = (merged as Record<string, unknown>)[key];
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+    // Persist (localStorage sync + file async)
+    saveSettingsToStore(merged);
     // Sync theme to floating lyrics window if available
     if (window.musicPlayer?.sendLyricsTheme) {
       const baseFonts = '"Consolas", "Courier New", "Fira Code", monospace';
@@ -188,18 +181,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const getCurrentSettings = useCallback((): AppSettings => {
     const result = { ...defaults };
-    let stored: Partial<AppSettings> = {};
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) stored = JSON.parse(raw);
-    } catch { /* ignore */ }
+    const stored = getSettingsFromStore();
     Object.assign(result, stored);
     return result;
   }, []);
 
   const resetSettings = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
     applyCssVars(defaults);
+    saveSettingsToStore({ ...defaults });
   }, []);
 
   // Theme methods
@@ -225,7 +214,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
     if (existing >= 0) themes[existing] = theme;
     else themes.push(theme);
-    localStorage.setItem(THEMES_KEY, JSON.stringify(themes));
+    saveThemesToStore(themes);
   }, [getCurrentSettings]);
 
   const applyTheme = useCallback((name: string): boolean => {
@@ -260,20 +249,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (idx < 0) return { success: false, error: 'notFound' };
     if (BUILTIN_THEMES.some(t => t.name === name)) return { success: false, error: 'builtin' };
     themes.splice(idx, 1);
-    localStorage.setItem(THEMES_KEY, JSON.stringify(themes));
+    saveThemesToStore(themes);
     return { success: true };
   }, []);
 
   const exportTheme = useCallback((name: string): Theme | null => {
     const theme = loadThemeData().find(t => t.name === name);
     if (!theme) return null;
-    const s = getCurrentSettings();
-    const exp = { ...theme };
-    if (!exp['bg-img-data'] && s['bg-img']) {
-      // Can't read base64 synchronously, handled in command handler
-    }
-    return exp;
-  }, [getCurrentSettings]);
+    return { ...theme };
+  }, []);
 
   const importThemeFromJson = useCallback((jsonStr: string): { success: boolean; name?: string; error?: string } => {
     let theme: Partial<Theme>;
@@ -299,22 +283,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
     if (existing >= 0) themes[existing] = entry;
     else themes.push(entry);
-    localStorage.setItem(THEMES_KEY, JSON.stringify(themes));
+    saveThemesToStore(themes);
     return { success: true, name: theme.name };
   }, []);
 
-  // Initialize on mount
+  // Initialize on mount — apply settings from in-memory cache (already loaded from localStorage)
   useEffect(() => {
-    let stored: Partial<AppSettings> = {};
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) stored = JSON.parse(raw);
-    } catch { /* ignore */ }
+    const stored = getSettingsFromStore();
     const merged = { ...defaults, ...stored };
     if (merged['bg-img']) merged['bg-img'] = merged['bg-img'].replace(/\\/g, '/');
     applyCssVars(merged);
-    // Ensure themes exist
-    loadThemeData();
   }, []);
 
   const setLangFn = useCallback((lang: string) => {
@@ -350,12 +328,10 @@ export function useSettings() {
   return ctx;
 }
 
-// Module-level helpers for non-React code
+// Module-level helper for non-React code (synchronous)
 export function getStoredSettings(): AppSettings {
   const result = { ...defaults };
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) Object.assign(result, JSON.parse(raw));
-  } catch { /* ignore */ }
+  const stored = getSettingsFromStore();
+  Object.assign(result, stored);
   return result;
 }

@@ -240,6 +240,30 @@ ipcMain.handle('app:userDataPath', () => {
   return app.getPath('userData');
 });
 
+// --- Config file I/O ---
+ipcMain.handle('config:read', async (_event, musicFolder, key) => {
+  try {
+    const filePath = path.join(musicFolder, 'config', `${key}.json`);
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    }
+    return null;
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('config:write', async (_event, musicFolder, key, data) => {
+  try {
+    const dir = path.join(musicFolder, 'config');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${key}.json`), JSON.stringify(data, null, 2), 'utf-8');
+    return { success: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 // --- Floating Lyrics Window ---
 
 function createLyricsWindow() {

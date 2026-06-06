@@ -62,6 +62,8 @@ export interface MusicPlayerAPI {
   onLyricsUpdate(callback: (data: LyricsUpdateData) => void): void;
   onLyricsTheme(callback: (data: LyricsThemeData) => void): void;
   onLyricsVisibilityChanged(callback: (data: { visible: boolean }) => void): void;
+  readConfig(musicFolder: string, key: string): Promise<any | null | { error: string }>;
+  writeConfig(musicFolder: string, key: string, data: any): Promise<{ success?: boolean; error?: string }>;
 }
 
 declare global {

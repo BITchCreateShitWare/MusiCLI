@@ -1,6 +1,7 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { PlayMode, LrcLine } from '../types';
 import { getStoredSettings, SHADOW_PRESETS } from './SettingsContext';
+import { saveSettings as saveSettingsToStore } from '../configStore';
 import { parseLRC, getCurrentLineIdx } from '../utils/lrc';
 
 function hasError(obj: unknown): obj is { error: string } {
@@ -321,9 +322,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setLyricsTerminalState(v);
     lastPrintedIdxRef.current = -1;
     if (!v) {
-      try { localStorage.setItem('musiccli-settings', JSON.stringify({ ...getStoredSettings(), lyricsTerminal: false })); } catch {}
+      try { saveSettingsToStore({ ...getStoredSettings(), lyricsTerminal: false }); } catch {}
     } else {
-      try { localStorage.setItem('musiccli-settings', JSON.stringify({ ...getStoredSettings(), lyricsTerminal: true })); } catch {}
+      try { saveSettingsToStore({ ...getStoredSettings(), lyricsTerminal: true }); } catch {}
     }
   }, []);
 
@@ -359,7 +360,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       try { await window.musicPlayer.hideFloatingLyrics(); } catch {}
     }
-    try { localStorage.setItem('musiccli-settings', JSON.stringify({ ...getStoredSettings(), lyricsFloating: v })); } catch {}
+    try { saveSettingsToStore({ ...getStoredSettings(), lyricsFloating: v }); } catch {}
   }, []);
 
   const toggleFloatingLyrics = useCallback(async () => {

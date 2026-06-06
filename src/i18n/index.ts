@@ -1,12 +1,12 @@
 import type { Lang } from '../types';
 import { LANGS, dict } from './translations';
+import { getLang as getLangFromStore, saveLang as saveLangToStore } from '../configStore';
 
-// Initialize synchronously — must happen before any t() call
+// Initialize synchronously — must happen before any t() call.
+// Reads from configStore's in-memory cache (populated from localStorage at module load).
 function initLang(): Lang {
-  try {
-    const saved = localStorage.getItem('musiccli-lang');
-    if (saved && LANGS.includes(saved as Lang)) return saved as Lang;
-  } catch { /* ignore */ }
+  const saved = getLangFromStore();
+  if (saved && LANGS.includes(saved as Lang)) return saved as Lang;
   return 'en';
 }
 
@@ -27,15 +27,12 @@ export function getLang(): Lang {
 export function setLang(lang: string): boolean {
   if (!LANGS.includes(lang as Lang)) return false;
   currentLang = lang as Lang;
-  try {
-    localStorage.setItem('musiccli-lang', lang);
-  } catch { /* ignore */ }
+  // Persist via configStore (writes to localStorage + file)
+  saveLangToStore(lang as Lang);
   return true;
 }
 
 export function loadLang(): void {
-  try {
-    const saved = localStorage.getItem('musiccli-lang');
-    if (saved && LANGS.includes(saved as Lang)) currentLang = saved as Lang;
-  } catch { /* ignore */ }
+  const saved = getLangFromStore();
+  if (saved && LANGS.includes(saved as Lang)) currentLang = saved as Lang;
 }

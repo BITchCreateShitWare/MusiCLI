@@ -28,4 +28,7 @@ contextBridge.exposeInMainWorld('musicPlayer', {
   onLyricsUpdate: (callback) => ipcRenderer.on('lyrics:update', (_event, data) => callback(data)),
   onLyricsTheme: (callback) => ipcRenderer.on('lyrics:update-theme', (_event, data) => callback(data)),
   onLyricsVisibilityChanged: (callback) => ipcRenderer.on('lyrics:visibility-changed', (_event, data) => callback(data)),
+  // Config file I/O
+  readConfig: (musicFolder, key) => ipcRenderer.invoke('config:read', musicFolder, key),
+  writeConfig: (musicFolder, key, data) => ipcRenderer.invoke('config:write', musicFolder, key, data),
 });

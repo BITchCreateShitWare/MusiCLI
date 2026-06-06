@@ -1,6 +1,7 @@
 import { register } from './registry';
 import { t } from '../i18n';
 import { getStoredSettings } from '../contexts/SettingsContext';
+import { setMusicFolder } from '../configStore';
 import { fuzzySearch } from '../utils/fuzzy';
 import { escapeHtml, formatTime, getFileName } from '../utils/format';
 import { darken } from '../utils/color';
@@ -339,6 +340,7 @@ export function registerAllCommands() {
     if (!files || files.length === 0) { c.printLine(t('folderEmpty'), 'info'); return; }
     c.replaceCurrentTracks(files);
     c.saveSettings({ musicFolder: dirPath });
+    setMusicFolder(dirPath);
     c.printLine(t('folderLoaded', { n: files.length }) + '  ' + t('typePlay'), 'info');
   }, 'helpFolder');
 

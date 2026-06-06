@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { SettingsProvider, SHADOW_PRESETS } from './contexts/SettingsContext';
+import { SettingsProvider, SHADOW_PRESETS, applyCssVars } from './contexts/SettingsContext';
 import { PlaylistProvider, usePlaylists, type PlayerSync } from './contexts/PlaylistContext';
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { TerminalProvider, useTerminal } from './contexts/TerminalContext';
@@ -11,6 +11,7 @@ import { NowPlaying } from './components/NowPlaying';
 import { InputLine } from './components/InputLine';
 import { FloatingLyrics } from './components/FloatingLyrics';
 import { getStoredSettings } from './contexts/SettingsContext';
+import { initConfig, setMusicFolder, saveSettings } from './configStore';
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
   const player = usePlayer();
@@ -51,23 +52,37 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
             if (exists) {
               const stored = getStoredSettings();
               stored.musicFolder = folder;
-              localStorage.setItem('musiccli-settings', JSON.stringify(stored));
+              setMusicFolder(folder);
+              saveSettings(stored);
             }
           });
         });
       } catch { /* browser mode - no musicPlayer */ }
     }
 
-    // Restore volume
-    if (s.volume != null) player.setVolume(s.volume);
-
-    // Restore lyrics state (floating window is opened in PlayerProvider init)
-    if (s.lyricsTerminal) {
-      player.setLyricsTerminal(true);
-    }
-    if (s.lyricsFloating) {
-      player.setLyricsFloating(true);
-    }
+    // Load config from files FIRST — must complete before any save operations
+    // to avoid overwriting manual file edits with stale localStorage cache.
+    initConfig().then((fileSettings) => {
+      if (fileSettings) {
+        applyCssVars(fileSettings);
+      }
+      // Refresh playlists from file-loaded config (replaces stale localStorage state)
+      playlists.reloadFromStore();
+      const reloadedPl = playlists.getCurrentPlaylist();
+      if (reloadedPl && reloadedPl.tracks && reloadedPl.tracks.length > 0) {
+        player.clearPlaylist();
+        player.addToPlaylist(reloadedPl.tracks);
+      }
+      // Restore lyrics state AFTER file config is loaded (uses updated cache)
+      const s2 = getStoredSettings();
+      if (s2.volume != null) player.setVolume(s2.volume);
+      if (s2.lyricsTerminal) {
+        player.setLyricsTerminal(true);
+      }
+      if (s2.lyricsFloating) {
+        player.setLyricsFloating(true);
+      }
+    });
   }, []);
 
   // Force-sync lyrics settings 200ms after startup (blunt but reliable)

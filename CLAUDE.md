@@ -81,14 +81,30 @@ Filter input: `onInput` reads `inputRef.current.value` → `updateFilter()`. **N
 
 ### Settings & Persistence
 
-All settings stored in localStorage under `musiccli-settings`. **Loaded synchronously** in `useState` initializer or at module level — never in `useEffect`.
+**Config files** are stored as JSON in `{musicFolder}/config/`:
+- `settings.json` — All AppSettings (colors, fonts, lyrics, etc.)
+- `themes.json` — Named themes
+- `playlists.json` — `{ playlists: Record<string, Playlist>, current: string }`
+- `lang.json` — Language code (`"en"` | `"zh"` | `"ja"`)
 
-- `musiccli-settings`: Colors, fonts, bg, blur, volume, musicFolder, lyrics config (20+ keys including lyrics colors/sizes/gap/align/shadow/mode/offset), seek settings, maxLines.
-- `musiccli-themes`: Named themes (built-in: "dark", "Claude Desktop"). Export/import as JSON with base64 images.
-- `musiccli-playlists` + `musiccli-current-pl`: Named playlist storage.
-- `musiccli-lang`: Language (en/zh/ja). Initialized synchronously at module load in `src/i18n/index.ts`.
+**Architecture**: `src/configStore.ts` is the single persistence layer.
+- Module-level in-memory cache populated synchronously from localStorage at import time
+- `initConfig()` (called once in AppInitializer useEffect) reads files asynchronously, updates cache + localStorage
+- All save functions (`saveSettings`, `saveThemes`, `savePlaylists`, `saveLang`) write to BOTH file AND localStorage
+- `initConfig()` is **read-only** — it never writes to files to avoid overwriting manual edits
+- `musicFolder` is the only bootstrap key stored solely in localStorage (`musicli-musicfolder`)
+- Synchronous getters (`getSettings()`, `getThemes()`, `getPlaylists()`, `getLang()`) read from in-memory cache for backward compat with existing sync call sites
 
-CSS variables on `:root` are the visual source of truth. `applyCssVars(s)` pushes settings to DOM. Save = merge + apply + localStorage.
+**Startup order** (critical for correctness):
+1. Module load: configStore cache ← localStorage (sync)
+2. React render
+3. AppInitializer useEffect: `initConfig()` reads files → updates cache → applyCssVars → `playlists.reloadFromStore()` → restore lyrics
+4. All writes (saves) happen AFTER files are loaded, so manual file edits survive restart
+
+**Key rules:**
+- `ensureDefault()` only persists if it actually made changes (not unconditionally)
+- Never write to files during startup — only on explicit user actions (commands)
+- `saveSettings` accepts `Partial<AppSettings>` — does `Object.assign` on the cache, then writes to file + localStorage
 
 ### Floating Lyrics Window
 
