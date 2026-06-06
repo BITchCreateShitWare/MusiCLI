@@ -2,7 +2,7 @@ import { register } from './registry';
 import { t } from '../i18n';
 import { getStoredSettings } from '../contexts/SettingsContext';
 import { fuzzySearch } from '../utils/fuzzy';
-import { escapeHtml, getFileName } from '../utils/format';
+import { escapeHtml, formatTime, getFileName } from '../utils/format';
 import { darken } from '../utils/color';
 import type { SelectCandidate, InteractiveItem, MetadataResult, Theme, LyricsMode } from '../types';
 
@@ -551,6 +551,17 @@ export function registerAllCommands() {
   register('blur', ['bgblur'], (args) => handleBlur(args), 'helpBlur');
   register('font', [], (args) => handleFont(args), 'helpFont');
 
+  register('seek', ['goto'], (args) => {
+    const c = ctx();
+    const s = parseFloat(args[0]);
+    if (isNaN(s)) {
+      c.printLine(t('seekUsage'), 'info');
+      return;
+    }
+    c.seek(s);
+    c.printLine(t('seekSet', { t: formatTime(s) }), 'success');
+  }, 'helpSeek');
+
   // theme
   register('theme', [], async (args) => {
     const c = ctx();
@@ -713,3 +724,6 @@ export function registerAllCommands() {
   // quit
   register('quit', ['exit', 'q'], () => window.close(), 'helpQuit');
 }
+
+// Register commands at module load time — survives Vite HMR module replacement
+registerAllCommands();

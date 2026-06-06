@@ -4,7 +4,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { usePlaylists } from '../contexts/PlaylistContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { getCommand } from '../commands/registry';
-import { setCommandContext, registerAllCommands, type CommandContext } from '../commands/handlers';
+import { setCommandContext, type CommandContext } from '../commands/handlers';
 import { escapeHtml } from '../utils/format';
 import { t } from '../i18n';
 
@@ -80,11 +80,6 @@ export function InputLine() {
     setLangFn: (lang) => settings.setLang(lang),
     syncLyricsTheme: () => {},
   }), [terminal, player, playlists, settings]);
-
-  // Register commands once
-  useEffect(() => {
-    registerAllCommands();
-  }, []);
 
   // Update command context whenever it changes
   useEffect(() => {
