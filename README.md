@@ -10,7 +10,7 @@
 
 ### 简介
 
-MusicLI 是一款**拟终端命令行风格**的桌面音乐播放器，使用 Electron + React + TypeScript 构建。支持 MP3/FLAC/WAV/OGG/M4A 等格式、ID3 元数据解析、LRC 歌词显示（终端内嵌 + 悬浮桌面歌词），以及强大的配置和主题系统。
+MusicLI 是一款**拟终端命令行风格**的桌面音乐播放器，使用 Electron + React + TypeScript 构建。支持 MP3/FLAC/WAV/OGG/M4A 等格式、ID3 元数据解析、LRC 歌词显示（终端内嵌 + 悬浮桌面歌词），可自由配置的主题系统。
 
 ### 特性
 
