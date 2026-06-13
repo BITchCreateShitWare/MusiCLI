@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useCallback, type ReactNode } fro
 import type { AppSettings, Lang, Theme } from '../types';
 import { parseColor, formatColor, darken } from '../utils/color';
 import { getLang, setLang as i18nSetLang } from '../i18n';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { getBridge, isBridgeAvailable } from '../bridge';
 import {
   getSettings as getSettingsFromStore,
   getThemes as getThemesFromStore,
@@ -112,7 +114,12 @@ export function applyCssVars(s: AppSettings) {
   root.style.setProperty('--lyric', s.lyric);
 
   if (s['bg-img']) {
-    root.style.setProperty('--bg-img', `url(file:///${s['bg-img'].replace(/\\/g, '/')})`);
+    const imgPath = s['bg-img'].replace(/\\/g, '/');
+    // Tauri v2: use convertFileSrc for proper asset protocol URL
+    const imgUrl = (window as any).__TAURI_INTERNALS__
+      ? convertFileSrc(imgPath)
+      : `file:///${imgPath}`;
+    root.style.setProperty('--bg-img', `url(${imgUrl})`);
   } else if (s['bg-img-data']) {
     const ext = s['bg-img-data'].startsWith('/9j/') ? 'jpg' :
                 s['bg-img-data'].startsWith('iVBOR') ? 'png' :
@@ -157,9 +164,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     // Persist (localStorage sync + file async)
     saveSettingsToStore(merged);
     // Sync theme to floating lyrics window if available
-    if (window.musicPlayer?.sendLyricsTheme) {
+    if (isBridgeAvailable()) {
       const baseFonts = '"Consolas", "Courier New", "Fira Code", monospace';
-      window.musicPlayer.sendLyricsTheme({
+      getBridge().sendLyricsTheme({
         font: merged.customFont ? `"${merged.customFont}", ${baseFonts}` : baseFonts,
         fontSize: merged.fontSize || 14,
         fg: merged.fg,

@@ -13,6 +13,7 @@
  */
 
 import type { AppSettings, Theme, Playlist, Lang } from './types';
+import { isBridgeAvailable, getBridge } from './bridge';
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ if (!_currentPlName || !_playlists[_currentPlName]) {
 
 async function readConfigFile<T>(key: ConfigKey, fallback: T): Promise<T> {
   const mf = getMusicFolder();
-  if (!mf || !window.musicPlayer?.readConfig) {
+  if (!mf || !isBridgeAvailable()) {
     // No music folder set or no IPC — use localStorage as source of truth
     const lsKey = key === 'playlists' ? LS_KEYS.playlists
                 : key === 'settings' ? LS_KEYS.settings
@@ -199,7 +200,7 @@ async function readConfigFile<T>(key: ConfigKey, fallback: T): Promise<T> {
   }
 
   try {
-    const result = await window.musicPlayer.readConfig(mf, key);
+    const result = await getBridge().readConfig(mf, key);
     if (result === null) {
       // File doesn't exist yet — use localStorage
       const lsKey = key === 'playlists' ? LS_KEYS.playlists
@@ -237,9 +238,9 @@ async function writeConfigFile(key: ConfigKey, data: unknown): Promise<void> {
 
   // Then write to file (async, best-effort)
   const mf = getMusicFolder();
-  if (mf && window.musicPlayer?.writeConfig) {
+  if (mf && isBridgeAvailable()) {
     try {
-      const result = await window.musicPlayer.writeConfig(mf, key, data);
+      const result = await getBridge().writeConfig(mf, key, data);
       if (hasError(result)) {
         console.warn(`[configStore] write ${key} error:`, result.error);
       }

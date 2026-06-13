@@ -12,6 +12,7 @@ import { InputLine } from './components/InputLine';
 import { FloatingLyrics } from './components/FloatingLyrics';
 import { getStoredSettings } from './contexts/SettingsContext';
 import { initConfig, setMusicFolder, saveSettings } from './configStore';
+import { getBridge, isBridgeAvailable, initBridge } from './bridge';
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
   const player = usePlayer();
@@ -22,6 +23,9 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
+
+    // Initialize bridge first (detects Tauri/Electron environment)
+    initBridge().then(() => {
 
     // Wire PlayerContext functions into PlaylistContext
     const sync: PlayerSync = {
@@ -45,10 +49,10 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
 
     // Auto-detect music folder
     const s = getStoredSettings();
-    if (!s.musicFolder) {
+    if (!s.musicFolder && isBridgeAvailable()) {
       try {
-        window.musicPlayer?.getDefaultMusicDir().then(folder => {
-          window.musicPlayer?.dirExists(folder).then(exists => {
+        getBridge().getDefaultMusicDir().then(folder => {
+          getBridge().dirExists(folder).then(exists => {
             if (exists) {
               const stored = getStoredSettings();
               stored.musicFolder = folder;
@@ -57,7 +61,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
             }
           });
         });
-      } catch { /* browser mode - no musicPlayer */ }
+      } catch { /* browser mode */ }
     }
 
     // Load config from files FIRST — must complete before any save operations
@@ -83,6 +87,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         player.setLyricsFloating(true);
       }
     });
+    }); // end initBridge().then()
   }, []);
 
   // Force-sync lyrics settings 200ms after startup (blunt but reliable)
@@ -90,7 +95,8 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
     const timer = setTimeout(() => {
       const s = getStoredSettings();
       const baseFonts = '"Consolas", "Courier New", "Fira Code", monospace';
-      window.musicPlayer?.sendLyricsTheme({
+      if (isBridgeAvailable()) {
+        getBridge().sendLyricsTheme({
         font: s.customFont ? `"${s.customFont}", ${baseFonts}` : baseFonts,
         fontSize: s.fontSize || 14, fg: s.fg, fgDim: s['fg-dim'],
         accent: s.accent, bg: s.bg,
@@ -103,7 +109,8 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         lyricsCurrentSize: s.lyricsCurrentSize || 24,
         lyricsNextSize: s.lyricsNextSize || 14,
         lyricsVertical: { off: 'horizontal-tb', rl: 'vertical-rl', lr: 'vertical-lr' }[s.lyricsVertical || 'off'],
-      });
+        });
+      }
     }, 200);
     return () => clearTimeout(timer);
   }, []);

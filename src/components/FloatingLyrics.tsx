@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getBridge } from '../bridge';
 
 interface LyricsState {
   current: string;
@@ -14,41 +15,37 @@ export function FloatingLyrics() {
     if (!el) return;
     const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
-      window.musicPlayer?.autoSizeLyrics(0, Math.ceil(r.height));
+      getBridge().autoSizeLyrics(0, Math.ceil(r.height));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
-    if (window.musicPlayer?.onLyricsUpdate) {
-      window.musicPlayer.onLyricsUpdate((data) => {
-        setLines(data);
-      });
-    }
-    if (window.musicPlayer?.onLyricsTheme) {
-      window.musicPlayer.onLyricsTheme((data) => {
-        const root = document.documentElement;
-        if (data.font) root.style.setProperty('--font', data.font);
-        if (data.fontSize) root.style.setProperty('--font-size', data.fontSize + 'px');
-        if (data.fg) root.style.setProperty('--fg', data.fg);
-        if (data.fgDim) root.style.setProperty('--fg-dim', data.fgDim);
-        if (data.accent) root.style.setProperty('--accent', data.accent);
-        if (data.bg) root.style.setProperty('--bg', data.bg);
-        if (data.lyricsAccent) root.style.setProperty('--lyrics-accent', data.lyricsAccent);
-        if (data.lyricsFg) root.style.setProperty('--lyrics-fg', data.lyricsFg);
-        if (data.lyricsGap != null) root.style.setProperty('--lyrics-gap', data.lyricsGap + 'px');
-        if (data.lyricsShadow) root.style.setProperty('--lyrics-shadow', data.lyricsShadow);
-        if (data.lyricsCurrentSize) root.style.setProperty('--lyrics-current-size', data.lyricsCurrentSize + 'px');
-        if (data.lyricsNextSize) root.style.setProperty('--lyrics-next-size', data.lyricsNextSize + 'px');
-        if (data.lyricsVertical) root.style.setProperty('--lyrics-vertical', data.lyricsVertical);
-        if (data.lyricsAlign) {
-          root.style.setProperty('--lyrics-align', data.lyricsAlign);
-          const flexMap: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
-          root.style.setProperty('--lyrics-align-flex', flexMap[data.lyricsAlign] || 'center');
-        }
-      });
-    }
+    getBridge().onLyricsUpdate((data) => {
+      setLines(data);
+    });
+    getBridge().onLyricsTheme((data) => {
+      const root = document.documentElement;
+      if (data.font) root.style.setProperty('--font', data.font);
+      if (data.fontSize) root.style.setProperty('--font-size', data.fontSize + 'px');
+      if (data.fg) root.style.setProperty('--fg', data.fg);
+      if (data.fgDim) root.style.setProperty('--fg-dim', data.fgDim);
+      if (data.accent) root.style.setProperty('--accent', data.accent);
+      if (data.bg) root.style.setProperty('--bg', data.bg);
+      if (data.lyricsAccent) root.style.setProperty('--lyrics-accent', data.lyricsAccent);
+      if (data.lyricsFg) root.style.setProperty('--lyrics-fg', data.lyricsFg);
+      if (data.lyricsGap != null) root.style.setProperty('--lyrics-gap', data.lyricsGap + 'px');
+      if (data.lyricsShadow) root.style.setProperty('--lyrics-shadow', data.lyricsShadow);
+      if (data.lyricsCurrentSize) root.style.setProperty('--lyrics-current-size', data.lyricsCurrentSize + 'px');
+      if (data.lyricsNextSize) root.style.setProperty('--lyrics-next-size', data.lyricsNextSize + 'px');
+      if (data.lyricsVertical) root.style.setProperty('--lyrics-vertical', data.lyricsVertical);
+      if (data.lyricsAlign) {
+        root.style.setProperty('--lyrics-align', data.lyricsAlign);
+        const flexMap: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
+        root.style.setProperty('--lyrics-align-flex', flexMap[data.lyricsAlign] || 'center');
+      }
+    });
   }, []);
 
   return (

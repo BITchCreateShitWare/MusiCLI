@@ -32,7 +32,7 @@
 
 html, body {
   height: 100%;
-  background: transparent;
+  background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
   font-size: var(--font-size);
@@ -40,36 +40,47 @@ html, body {
   line-height: var(--line-height);
   overflow: hidden;
   user-select: none;
+    border-radius: 24px;
 }
 
-body, #root {
+body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 5px 3px;
+  padding: 0px;
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 5px;
+    border-radius: 8px;
 }
 
 /* === Background Layer === */
-#bg-layer {
+#bg-layer-clip {
   position: fixed;
   inset: 0;
   z-index: -1;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#bg-layer {
+  position: absolute;
+  inset: -20px;
   background-color: var(--bg);
   background-image: var(--bg-img);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   filter: blur(var(--bg-blur));
-  opacity: 0.45;
+  opacity: 1;
 }
 
-#bg-layer::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--bg);
-  opacity: 0.85;
-}
 
 /* === Title Bar === */
 #titlebar {

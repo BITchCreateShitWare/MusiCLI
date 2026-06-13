@@ -7,6 +7,7 @@ import { getCommand } from '../commands/registry';
 import { setCommandContext, type CommandContext } from '../commands/handlers';
 import { escapeHtml } from '../utils/format';
 import { t } from '../i18n';
+import { getBridge } from '../bridge';
 
 export function InputLine() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -138,7 +139,7 @@ export function InputLine() {
       setCommandContext(ctx);
       const fp = ctx.playIndex(picked.idx);
       if (fp) {
-        const result = await window.musicPlayer.readMetadata(fp);
+        const result = await getBridge().readMetadata(fp);
         if (!result.error) {
           ctx.printRaw('');
           ctx.printLine(`<cmd>${t('nowPlaying')}</cmd>`, 'success');

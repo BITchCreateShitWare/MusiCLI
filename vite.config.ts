@@ -6,5 +6,17 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
+    target: 'esnext',
+    minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+    sourcemap: !!process.env.TAURI_DEBUG,
   },
+  clearScreen: false,
+  server: {
+    port: 1430,
+    strictPort: false,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
+  },
+  envPrefix: ['VITE_', 'TAURI_'],
 });

@@ -1,0 +1,36 @@
+{
+  "productName": "MusicLI",
+  "version": "2.1.0",
+  "identifier": "com.kirarineko.musicli",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1430",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "MusicLI",
+        "width": 950,
+        "height": 650,
+        "minWidth": 700,
+        "minHeight": 400,
+        "decorations": false,
+        "center": true,
+        "transparent": true,
+        "shadow": false,
+        "backgroundColor": "#0c0c0c"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "plugins": {}
+}

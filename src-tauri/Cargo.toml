@@ -1,0 +1,49 @@
+[package]
+name = "musicli"
+version = "2.1.0"
+edition = "2021"
+
+[features]
+default = []
+asio = ["cpal/asio"]
+
+[lib]
+name = "musicli_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "unstable"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Audio metadata
+lofty = "0.21"
+
+# Audio decoding
+symphonia = { version = "0.6", features = [
+    "mp3",
+    "aac",
+    "isomp4",
+    "alac",
+] }
+
+# Audio output (WASAPI default + ASIO optional)
+cpal = "0.18"
+
+# Lock-free ring buffer
+rb = "0.4"
+
+# Sample rate conversion
+rubato = "0.16"
+
+# ZIP
+zip = "2"
+
+# Utilities
+walkdir = "2"
+base64 = "0.22"
+dirs = "5"

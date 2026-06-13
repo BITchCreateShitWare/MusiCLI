@@ -5,6 +5,7 @@ import { setMusicFolder } from '../configStore';
 import { fuzzySearch } from '../utils/fuzzy';
 import { escapeHtml, formatTime, getFileName } from '../utils/format';
 import { darken } from '../utils/color';
+import { getBridge } from '../bridge';
 import type { SelectCandidate, InteractiveItem, MetadataResult, Theme, LyricsMode } from '../types';
 
 function hasError(obj: unknown): obj is { error: string } {
@@ -104,7 +105,7 @@ function ctx(): CommandContext {
 }
 
 async function readMetadata(filePath: string): Promise<MetadataResult | null> {
-  const result = await window.musicPlayer.readMetadata(filePath);
+  const result = await getBridge().readMetadata(filePath);
   if (result.error) {
     ctx().printLine(t('metadataError', { err: result.error }), 'error');
     return null;
@@ -223,7 +224,7 @@ async function handleBg(args: string[]) {
     c.printLine(t('bgCleared'), 'info');
     return;
   }
-  const imgPath = await window.musicPlayer.selectImage();
+  const imgPath = await getBridge().selectImage();
   if (!imgPath) { c.printLine(t('bgNoImage'), 'info'); return; }
   c.saveSettings({ 'bg-img': imgPath });
   c.printLine(t('bgSet'), 'success');
@@ -258,9 +259,9 @@ async function handleFont(args: string[]) {
     c.saveSettings({ fontWeight: w });
     c.printLine(t('fontWeightSet', { v: w }), 'success');
   } else if (sub === 'import') {
-    const fontPath = await window.musicPlayer.selectFont();
+    const fontPath = await getBridge().selectFont();
     if (!fontPath) { c.printLine(t('fontNoSelect'), 'info'); return; }
-    const base64 = await window.musicPlayer.readFileBase64(fontPath);
+    const base64 = await getBridge().readFileBase64(fontPath);
     if (hasError(base64)) { c.printLine(t('fontImportSelect'), 'error'); return; }
     const ext = fontPath.split('.').pop()!.toLowerCase();
     const mimeMap: Record<string, string> = { ttf: 'font/truetype', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' };
@@ -284,9 +285,9 @@ export function registerAllCommands() {
   register('open', ['load'], async (args) => {
     const c = ctx();
     if (args[0] === 'dir' || args[0] === 'folder') {
-      const dirPath = await window.musicPlayer.selectFolder();
+      const dirPath = await getBridge().selectFolder();
       if (!dirPath) { c.printLine(t('folderNoSelect'), 'info'); return; }
-      const files = await window.musicPlayer.listAudioFiles(dirPath);
+      const files = await getBridge().listAudioFiles(dirPath);
       if (hasError(files)) { c.printLine(t('metadataError', { err: files.error }), 'error'); return; }
       if (!files || files.length === 0) { c.printLine(t('folderEmpty'), 'info'); return; }
       c.replaceCurrentTracks(files);
@@ -299,7 +300,7 @@ export function registerAllCommands() {
       c.printLine(t('folderLoaded', { n: files.length }) + '  ' + t('typePlay'), 'info');
       return;
     }
-    const files = await window.musicPlayer.selectFiles();
+    const files = await getBridge().selectFiles();
     if (files.length === 0) { c.printLine(t('noFiles'), 'info'); return; }
     c.addTracksToCurrent(files);
     const fp = c.playIndex(c.playlist.indexOf(files[0]));
@@ -338,9 +339,9 @@ export function registerAllCommands() {
   // folder
   register('folder', ['dir', 'opendir'], async () => {
     const c = ctx();
-    const dirPath = await window.musicPlayer.selectFolder();
+    const dirPath = await getBridge().selectFolder();
     if (!dirPath) { c.printLine(t('folderNoSelect'), 'info'); return; }
-    const files = await window.musicPlayer.listAudioFiles(dirPath);
+    const files = await getBridge().listAudioFiles(dirPath);
     if ('error' in files) { c.printLine(t('metadataError', { err: files.error }), 'error'); return; }
     if (!files || files.length === 0) { c.printLine(t('folderEmpty'), 'info'); return; }
     c.replaceCurrentTracks(files);
@@ -353,10 +354,10 @@ export function registerAllCommands() {
   register('import', ['batch'], async () => {
     const c = ctx();
     let folder = getStoredSettings().musicFolder || '';
-    if (!folder) folder = await window.musicPlayer.getDefaultMusicDir();
-    const exists = folder ? await window.musicPlayer.dirExists(folder) : false;
+    if (!folder) folder = await getBridge().getDefaultMusicDir();
+    const exists = folder ? await getBridge().dirExists(folder) : false;
     if (!exists || !folder) { c.printLine(t('importNoFolder'), 'info'); return; }
-    const files = await window.musicPlayer.listAudioFiles(folder);
+    const files = await getBridge().listAudioFiles(folder);
     if (hasError(files) || !files || files.length === 0) { c.printLine(t('importNoFiles'), 'info'); return; }
     const items: InteractiveItem[] = files.map(f => ({
       name: getFileName(f), path: f, selected: false, visible: true,
@@ -589,12 +590,12 @@ export function registerAllCommands() {
       const trackName = (mp3Path.split(/[/\\]/).pop() || '').replace(/\.[^.]+$/, '.lrc');
       const ms = parseInt(rest, 10);
       if (isNaN(ms)) {
-        const offsets = await window.musicPlayer.readLrcOffsets(lrcDir);
+        const offsets = await getBridge().readLrcOffsets(lrcDir);
         const cur = (!hasError(offsets) && offsets[trackName]) ? offsets[trackName] : 0;
         c.printLine(t('lyricOffsetSet', { v: cur }), 'info');
         return;
       }
-      const wr = await window.musicPlayer.writeLrcOffset(lrcDir, trackName, ms);
+      const wr = await getBridge().writeLrcOffset(lrcDir, trackName, ms);
       if (!hasError(wr)) {
         c.printLine(ms === 0 ? t('lyricOffsetCleared') : t('lyricOffsetSet', { v: ms }), 'success');
         // Reload LRC to apply offset immediately
@@ -614,7 +615,7 @@ export function registerAllCommands() {
       const s = getStoredSettings();
       const cur = s.lyricsLocked;
       c.saveSettings({ lyricsLocked: !cur });
-      window.musicPlayer?.setLyricsMouseEvents(cur);
+      getBridge()?.setLyricsMouseEvents(cur);
       c.printLine(!cur ? t('lyricLockOn') : t('lyricLockOff'), 'success');
     } else if (sub === 'shadow') {
       const val = (rest || '').toLowerCase();
@@ -775,21 +776,21 @@ export function registerAllCommands() {
         const imgPath = s['bg-img'];
         if (imgPath) {
           try {
-            const b64 = await window.musicPlayer.readFileBase64(imgPath);
+            const b64 = await getBridge().readFileBase64(imgPath);
             if (!hasError(b64)) theme['bg-img-data'] = b64;
           } catch { /* ignore */ }
         }
       }
       const jsonStr = JSON.stringify(theme, null, 2);
-      const savePath = await window.musicPlayer.saveFileDialog(name + '.json');
+      const savePath = await getBridge().saveFileDialog(name + '.json');
       if (!savePath) return;
-      const wr = await window.musicPlayer.writeFile(savePath, jsonStr);
+      const wr = await getBridge().writeFile(savePath, jsonStr);
       if (wr.error) { c.printLine(wr.error, 'error'); return; }
       c.printLine(t('themeExported'), 'success');
     } else if (sub === 'import') {
-      const filePath = await window.musicPlayer.openThemeDialog();
+      const filePath = await getBridge().openThemeDialog();
       if (!filePath) return;
-      const result = await window.musicPlayer.readFile(filePath);
+      const result = await getBridge().readFile(filePath);
       if (hasError(result) || !result) { c.printLine(t('themeImportError'), 'error'); return; }
       // Import logic inline
       try {
@@ -916,7 +917,7 @@ export function registerAllCommands() {
         const musicFolder = s.musicFolder || '';
 
         // Select save location
-        const savePath = await window.musicPlayer.saveFileDialog(
+        const savePath = await getBridge().saveFileDialog(
           `MusicLI_${sanitizeName(plName)}_sync.zip`,
           [{ name: 'ZIP Archive', extensions: ['zip'] }],
         );
@@ -926,8 +927,8 @@ export function registerAllCommands() {
         const tmpDir = savePath.replace(/\.zip$/i, '') + '_tmp';
         const audioDir = tmpDir + '/audio';
         const lrcDir = tmpDir + '/lrc';
-        await window.musicPlayer.mkdir(audioDir);
-        await window.musicPlayer.mkdir(lrcDir);
+        await getBridge().mkdir(audioDir);
+        await getBridge().mkdir(lrcDir);
 
         c.printLine(t('syncExporting', { n: pl.tracks.length }), 'info');
 
@@ -937,7 +938,7 @@ export function registerAllCommands() {
 
         for (let i = 0; i < pl.tracks.length; i++) {
           const src = pl.tracks[i];
-          const meta = await window.musicPlayer.readMetadata(src);
+          const meta = await getBridge().readMetadata(src);
           if (hasError(meta)) continue;
 
           const idx = String(i + 1).padStart(2, '0');
@@ -947,7 +948,7 @@ export function registerAllCommands() {
 
           // Copy audio
           const audioDest = audioDir + '/' + baseName + '.' + ext;
-          const copyResult = await window.musicPlayer.copyFile(src, audioDest);
+          const copyResult = await getBridge().copyFile(src, audioDest);
           if (hasError(copyResult)) {
             c.printLine(t('syncCopyError', { file: baseName + '.' + ext, err: copyResult.error }), 'error');
           }
@@ -956,15 +957,15 @@ export function registerAllCommands() {
           let lrcFile: string | undefined;
           let lrcOffset: number | undefined;
           if (musicFolder) {
-            const found = await window.musicPlayer.findLrc(src, musicFolder);
+            const found = await getBridge().findLrc(src, musicFolder);
             if (found && !hasError(found)) {
               const lrcDest = lrcDir + '/' + baseName + '.lrc';
-              await window.musicPlayer.copyFile(found, lrcDest);
+              await getBridge().copyFile(found, lrcDest);
               lrcFile = baseName + '.lrc';
 
               // Read offset for this track
               const lrcParentDir = found.substring(0, Math.max(found.lastIndexOf('/'), found.lastIndexOf('\\')));
-              const offsets = await window.musicPlayer.readLrcOffsets(lrcParentDir);
+              const offsets = await getBridge().readLrcOffsets(lrcParentDir);
               if (offsets && !hasError(offsets)) {
                 const trackKey = getFileName(src);
                 if (offsets[trackKey]) {
@@ -1002,15 +1003,15 @@ export function registerAllCommands() {
           },
           lrcOffsets: Object.keys(lrcOffsets).length > 0 ? lrcOffsets : undefined,
         };
-        await window.musicPlayer.writeFile(tmpDir + '/manifest.json', JSON.stringify(manifest, null, 2));
+        await getBridge().writeFile(tmpDir + '/manifest.json', JSON.stringify(manifest, null, 2));
 
         // README.txt
         const readme = 'NekoCraft\nhttps://github.com/KirariNeko/MusicLI\n';
-        await window.musicPlayer.writeFile(tmpDir + '/README.txt', readme);
+        await getBridge().writeFile(tmpDir + '/README.txt', readme);
 
         // Create ZIP
         c.printLine(t('syncZipping'), 'info');
-        const zipResult = await window.musicPlayer.createZip(tmpDir, savePath);
+        const zipResult = await getBridge().createZip(tmpDir, savePath);
         if (hasError(zipResult)) {
           c.printLine(t('syncZipError', { err: zipResult.error }), 'error');
         } else {
@@ -1018,11 +1019,11 @@ export function registerAllCommands() {
         }
       } else if (action === 'import') {
         // === Import playlist ===
-        const filePath = await window.musicPlayer.selectSyncFile();
+        const filePath = await getBridge().selectSyncFile();
         if (!filePath) return;
 
         const s = getStoredSettings();
-        const musicFolder = s.musicFolder || (await window.musicPlayer.getDefaultMusicDir());
+        const musicFolder = s.musicFolder || (await getBridge().getDefaultMusicDir());
         const isZip = filePath.toLowerCase().endsWith('.zip');
 
         let manifest: import('../types').SyncManifest;
@@ -1033,20 +1034,20 @@ export function registerAllCommands() {
           // Extract ZIP to temp dir
           const extractDir = filePath.replace(/\.zip$/i, '') + '_extracted';
           c.printLine(t('syncExtracting'), 'info');
-          const extractResult = await window.musicPlayer.extractZip(filePath, extractDir);
+          const extractResult = await getBridge().extractZip(filePath, extractDir);
           if (hasError(extractResult)) {
             c.printLine(t('syncZipError', { err: extractResult.error }), 'error');
             return;
           }
           // Read manifest from extracted dir
-          const raw = await window.musicPlayer.readFile(extractDir + '/manifest.json');
+          const raw = await getBridge().readFile(extractDir + '/manifest.json');
           if (hasError(raw) || !raw) { c.printLine(t('syncInvalidManifest'), 'error'); return; }
           try { manifest = JSON.parse(raw); } catch { c.printLine(t('syncInvalidManifest'), 'error'); return; }
           audioSrcDir = extractDir + '/audio';
           lrcSrcDir = extractDir + '/lrc';
         } else {
           // Legacy: plain manifest.json (folder mode)
-          const raw = await window.musicPlayer.readFile(filePath);
+          const raw = await getBridge().readFile(filePath);
           if (hasError(raw) || !raw) { c.printLine(t('syncInvalidManifest'), 'error'); return; }
           try { manifest = JSON.parse(raw); } catch { c.printLine(t('syncInvalidManifest'), 'error'); return; }
           const pkgDir = filePath.substring(0, Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')));
@@ -1060,7 +1061,7 @@ export function registerAllCommands() {
 
         // Dedicated import folder per playlist
         const importDir = musicFolder.replace(/[/\\]$/, '') + '/MusicLI_Imports/' + sanitizeName(manifest.playlist.name);
-        await window.musicPlayer.mkdir(importDir);
+        await getBridge().mkdir(importDir);
 
         c.printLine(t('syncImporting', { n: manifest.playlist.tracks.length }), 'info');
 
@@ -1069,7 +1070,7 @@ export function registerAllCommands() {
           // Copy audio
           const audioSrc = audioSrcDir + '/' + track.filename;
           const audioDest = importDir + '/' + track.filename;
-          const copyResult = await window.musicPlayer.copyFile(audioSrc, audioDest);
+          const copyResult = await getBridge().copyFile(audioSrc, audioDest);
           if (hasError(copyResult)) {
             c.printLine(t('syncCopyError', { file: track.filename, err: copyResult.error }), 'error');
             continue;
@@ -1080,7 +1081,7 @@ export function registerAllCommands() {
           if (track.lrcFile) {
             const lrcSrc = lrcSrcDir + '/' + track.lrcFile;
             const lrcDest = importDir + '/' + track.lrcFile;
-            await window.musicPlayer.copyFile(lrcSrc, lrcDest);
+            await getBridge().copyFile(lrcSrc, lrcDest);
           }
         }
 
@@ -1089,7 +1090,7 @@ export function registerAllCommands() {
           for (const [lrcName, offset] of Object.entries(manifest.lrcOffsets)) {
             // lrcName is like "01 - Song.lrc", derive track name
             const trackName = lrcName.replace(/\.lrc$/i, '');
-            await window.musicPlayer.writeLrcOffset(importDir, trackName, offset);
+            await getBridge().writeLrcOffset(importDir, trackName, offset);
           }
         }
 
@@ -1116,21 +1117,21 @@ export function registerAllCommands() {
           const imgPath = st['bg-img'];
           if (imgPath) {
             try {
-              const b64 = await window.musicPlayer.readFileBase64(imgPath);
+              const b64 = await getBridge().readFileBase64(imgPath);
               if (!hasError(b64)) theme['bg-img-data'] = b64;
             } catch { /* ignore */ }
           }
         }
         const jsonStr = JSON.stringify(theme, null, 2);
-        const savePath = await window.musicPlayer.saveFileDialog((name || 'theme') + '.json');
+        const savePath = await getBridge().saveFileDialog((name || 'theme') + '.json');
         if (!savePath) return;
-        const wr = await window.musicPlayer.writeFile(savePath, jsonStr);
+        const wr = await getBridge().writeFile(savePath, jsonStr);
         if (wr.error) { c.printLine(wr.error, 'error'); return; }
         c.printLine(t('syncThemeExported'), 'success');
       } else if (action === 'import') {
-        const filePath = await window.musicPlayer.openThemeDialog();
+        const filePath = await getBridge().openThemeDialog();
         if (!filePath) return;
-        const result = await window.musicPlayer.readFile(filePath);
+        const result = await getBridge().readFile(filePath);
         if (hasError(result) || !result) { c.printLine(t('themeImportError'), 'error'); return; }
         try {
           const theme = JSON.parse(result);
@@ -1146,8 +1147,52 @@ export function registerAllCommands() {
     }
   }, 'helpSync');
 
+  // audio
+  register('audio', ['aud'], async (args) => {
+    const c = ctx();
+    const sub = (args[0] || '').toLowerCase();
+
+    if (sub === 'mode') {
+      const modeArg = (args[1] || '').toLowerCase();
+      if (modeArg === 'wasapi' || modeArg === 'normal' || modeArg === 'w') {
+        try {
+          const result = await getBridge().setAudioMode('wasapi');
+          c.printLine(result, 'success');
+        } catch (err) {
+          c.printLine(String(err), 'error');
+        }
+      } else if (modeArg === 'asio' || modeArg === 'exclusive' || modeArg === 'a') {
+        try {
+          const result = await getBridge().setAudioMode('asio');
+          c.printLine(result, 'success');
+        } catch (err) {
+          c.printLine(String(err), 'error');
+        }
+      } else {
+        try {
+          const current = await getBridge().getAudioMode();
+          c.printLine(`<cmd>Audio Mode:</cmd> ${current}`, 'info');
+          c.printRaw('  wasapi     - System mixer (default)');
+          c.printRaw('  asio       - ASIO exclusive (requires ASIO drivers)');
+        } catch (err) {
+          c.printLine(String(err), 'error');
+        }
+      }
+    } else if (sub === 'devices') {
+      try {
+        const devices = await getBridge().listAudioDevices();
+        c.printLine('<cmd>Audio Devices:</cmd>', 'accent');
+        devices.forEach((d, i) => c.printRaw(`  ${i + 1}. ${d}`));
+      } catch (err) {
+        c.printLine(String(err), 'error');
+      }
+    } else {
+      c.printLine('Usage: audio mode [wasapi|asio] | audio devices', 'info');
+    }
+  }, 'helpAudio');
+
   // quit
-  register('quit', ['exit', 'q'], () => window.close(), 'helpQuit');
+  register('quit', ['exit', 'q'], () => getBridge().close(), 'helpQuit');
 }
 
 // Register commands at module load time — survives Vite HMR module replacement

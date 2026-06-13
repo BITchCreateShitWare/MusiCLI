@@ -5,34 +5,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run Commands
 
 ```bash
-pnpm dev              # Vite dev server only (browser, no Electron IPC)
-pnpm start            # Full Electron app: starts Vite + launches Electron
+pnpm dev              # Vite dev server only (browser, no native IPC)
+pnpm tauri dev        # Full Tauri app: starts Vite + launches Tauri window
 pnpm build            # TypeScript check + production build to dist/
+pnpm tauri build      # Build release binary
 pnpm lint             # ESLint
-pnpm electron:build:win  # Build Windows installer (needs PowerShell in PATH)
 ```
 
-Package manager is **pnpm**. The `package.json` does NOT have `"type": "module"` — Electron main/preload use CommonJS (`require`), while the renderer (React/TS) is bundled by Vite as ESM.
+Package manager is **pnpm**.
 
-### Packaging
+### Prerequisites
 
-```bash
-# On Windows, PowerShell must be in PATH for electron-builder:
-export PATH="$PATH:/c/Windows/System32/WindowsPowerShell/v1.0"
-pnpm electron:build:win
-```
-
-Output: `release/Musicli 2.0.0.exe` (portable) and `release/Musicli-2.0.0-win.zip`.
+- **Rust toolchain** — Install via [rustup.rs](https://rustup.rs)
+- **LLVM/Clang** — For ASIO SDK build: `winget install LLVM.LLVM`
 
 ## Architecture Overview
 
-**Electron** desktop music player with a **pseudo-CLI terminal aesthetic**. User types commands into an input line at the bottom; output scrolls in a terminal-like area above. A now-playing bar sits between them. Supports floating lyrics in a separate transparent window.
+**Tauri v2** desktop music player with a **pseudo-CLI terminal aesthetic**. User types commands into an input line at the bottom; output scrolls in a terminal-like area above. A now-playing bar sits between them. Supports floating lyrics in a separate transparent window.
 
 ### Process Model
 
-- **Main process** (`electron/main.js`): CJS. Creates a frameless BrowserWindow + transparent floating lyrics window. Exposes IPC handlers for file dialogs, music-metadata, directory listing (including recursive LRC search), file I/O, LRC offset persistence, lyrics theme replay, mouse passthrough toggle, window auto-size. Uses `webSecurity: false` only in dev mode (`file://` audio cross-origin with `http://localhost` page).
-- **Preload** (`electron/preload.js`): CJS. Bridges IPC to renderer via `contextBridge.exposeInMainWorld('musicPlayer', { ... })`. All renderer↔main communication goes through this single surface.
-- **Renderer** (`src/`): React 19 + TypeScript, bundled by Vite. No Node.js integration (`contextIsolation: true`, `nodeIntegration: false`).
+- **Rust backend** (`src-tauri/src/`): All IPC commands, audio engine, file I/O, metadata parsing, ZIP, LRC, config.
+- **Frontend** (`src/`): React 19 + TypeScript, bundled by Vite. Communicates with Rust via `bridge/tauri.ts` using `@tauri-apps/api/core` invoke().
 
 ### Renderer Component Tree & Context Hierarchy
 
@@ -40,7 +34,7 @@ Output: `release/Musicli 2.0.0.exe` (portable) and `release/Musicli-2.0.0-win.zi
 App
 ├── SettingsProvider          (CSS variables, themes, language)
 │   └── PlaylistProvider      (named playlists, syncs to player)
-│       └── PlayerProvider    (audio element, playback state, lyrics)
+│       └── PlayerProvider    (Rust audio engine, playback state, lyrics)
 │           └── TerminalProvider (output lines, select/imode/seek states, commands)
 │               └── AppInitializer (wires contexts together, startup sync)
 │                   ├── BackgroundLayer
@@ -51,13 +45,24 @@ App
 │                   └── InputLine       (command input, history, keybindings)
 ```
 
-The nesting order matters: `PlaylistProvider` wraps `PlayerProvider` because playlist operations (add/remove/switch tracks) must sync into the player's live playlist array.
+### Audio Engine
 
-### Context Cross-Communication
+All audio playback goes through Rust (`src-tauri/src/audio/`):
 
-**PlaylistContext ↔ PlayerContext**: `PlaylistContext.registerPlayerSync(sync: PlayerSync)` receives `addToPlaylist`, `clearPlaylist`, `getPlaylist` from the player. `AppInitializer` wires this once. Then `addTracksToCurrent()`, `replaceCurrentTracks()`, `switchPlaylist()`, and `deletePlaylist()` all automatically sync to the player's active playlist.
+- **decoder.rs** — Symphonia-based decoder thread. Reads audio file → decodes to f32 PCM → writes to ring buffer.
+- **output.rs** — cpal output stream. Reads from ring buffer → sends to audio device.
+- **engine.rs** — State machine coordinating decoder, output, seek, volume.
+- **Two modes:**
+  - `audio mode wasapi` — cpal WASAPI Shared (default, system mixer)
+  - `audio mode asio` — cpal ASIO (exclusive, requires ASIO drivers)
 
-**PlayerContext → TerminalContext**: `PlayerContext.registerLyricPrinter(fn)` receives `terminal.printLine`. `AppInitializer` wires this. Terminal-mode lyrics use this to print timed lines.
+Frontend polls `get_position()` every 100ms for progress updates and lyrics sync.
+
+### Bridge Pattern
+
+All frontend↔backend communication goes through `src/bridge/index.ts` (IBridge interface).
+- `src/bridge/tauri.ts` — Tauri implementation using invoke() and plugin APIs
+- `initBridge()` auto-detects environment and loads the appropriate bridge
 
 ### Command System
 
@@ -98,34 +103,14 @@ Filter input: `onInput` reads `inputRef.current.value` → `updateFilter()`. **N
 **Startup order** (critical for correctness):
 1. Module load: configStore cache ← localStorage (sync)
 2. React render
-3. AppInitializer useEffect: `initConfig()` reads files → updates cache → applyCssVars → `playlists.reloadFromStore()` → restore lyrics
+3. AppInitializer useEffect: `initBridge()` → `initConfig()` reads files → updates cache → applyCssVars → `playlists.reloadFromStore()` → restore lyrics
 4. All writes (saves) happen AFTER files are loaded, so manual file edits survive restart
-
-**Key rules:**
-- `ensureDefault()` only persists if it actually made changes (not unconditionally)
-- Never write to files during startup — only on explicit user actions (commands)
-- `saveSettings` accepts `Partial<AppSettings>` — does `Object.assign` on the cache, then writes to file + localStorage
 
 ### Floating Lyrics Window
 
-Separate BrowserWindow (`transparent: true, alwaysOnTop: true`), loads same app with `#/lyrics` hash. Fixed width 600px, auto-height via `ResizeObserver` + IPC `lyrics-window:auto-size`.
+Separate Tauri WebviewWindow (`transparent: true, alwaysOnTop: true`), loads same app with `#/lyrics` hash. Fixed width 600px, auto-height via `ResizeObserver` + IPC `lyrics_auto_size`.
 
-**Theme sync**: Sent via `sendLyricsTheme()` IPC → main process stores `lastLyricsTheme` → replays on `did-finish-load`. Three sync points fire the same payload on a 200ms delay:
-1. `AppInitializer` startup effect
-2. `PlayerContext.setLyricsFloating(true)` on window open  
-3. `SettingsContext.saveSettings()` on any config change
-
-All floating lyrics CSS (`--lyrics-*`) has defaults on `:root`. IPC sets CSS variables on the lyrics window's document root. CSS `var()` reads directly without fallback (defaults are on `:root`).
-
-Shadow presets: `SHADOW_PRESETS` map in `SettingsContext.tsx` (large/medium/small → CSS text-shadow values).
-
-### LRC Timing Offset
-
-Per-track offset (ms) stored in `lrc/offsets.json` in the LRC directory. `lyric offset <ms>` writes via IPC `lrc:writeOffset`. On `loadLRC`, offsets are read via `lrc:readOffsets` and applied to parsed lines. Wrapped in try-catch so missing IPC doesn't crash lyrics loading.
-
-### Independent Lyrics States
-
-Terminal and floating lyrics are independent booleans (`lyricsTerminal`, `lyricsFloating`). Both can be on simultaneously. `lyric t` toggles terminal, `lyric f` toggles floating, `lyric off` disables both. Vertical mode (`lyric v`) cycles: off → vertical-rl → vertical-lr.
+**Theme sync**: Sent via `send_lyrics_theme` IPC → Rust stores in `LAST_LYRICS_THEME` mutex → emits to lyrics window via event system.
 
 ### Key Lessons Learned
 

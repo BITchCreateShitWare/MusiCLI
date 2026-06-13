@@ -3,6 +3,7 @@ import type { PlayMode, LrcLine } from '../types';
 import { getStoredSettings, SHADOW_PRESETS } from './SettingsContext';
 import { saveSettings as saveSettingsToStore } from '../configStore';
 import { parseLRC, getCurrentLineIdx } from '../utils/lrc';
+import { getBridge } from '../bridge';
 
 function hasError(obj: unknown): obj is { error: string } {
   return typeof obj === 'object' && obj !== null && 'error' in obj;
@@ -58,7 +59,6 @@ interface PlayerContextValue {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const playlistRef = useRef<string[]>([]);
   const currentIndexRef = useRef(-1);
   const [currentTime, setCurrentTime] = useState(0);
@@ -77,6 +77,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const endedCallbacksRef = useRef<Array<() => void>>([]);
   const loadLrcRef = useRef<((path: string) => void) | null>(null);
   const lyricPrinterRef = useRef<((text: string, className?: string) => void) | null>(null);
+  const isPlayingRef = useRef(false);
+  const durationRef = useRef(0);
+  const currentTimeRef = useRef(0);
 
   const registerLyricPrinter = useCallback((fn: (text: string, className?: string) => void) => {
     lyricPrinterRef.current = fn;
@@ -89,7 +92,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const s = getStoredSettings();
     if (s.volume != null) {
       setVolumeState(s.volume);
-      if (audioRef.current) audioRef.current.volume = s.volume / 100;
+      try { getBridge().setVolume(s.volume); } catch {}
     }
     if (s.lyricsTerminal) {
       setLyricsTerminalState(true);
@@ -98,7 +101,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (s.lyricsFloating) {
       setLyricsFloatingState(true);
       lyricsFloatingRef.current = true;
-      try { window.musicPlayer.showFloatingLyrics(); } catch {}
+      try { getBridge().showFloatingLyrics(); } catch {}
     }
   }, []);
 
@@ -118,16 +121,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return shuffleStackRef.current.pop() ?? -1;
   }, []);
 
+  // Play a track via Rust audio engine (async, fire-and-forget from sync context)
+  const playTrackAsync = useCallback(async (fp: string) => {
+    try {
+      const dur = await getBridge().loadTrack(fp);
+      setDuration(dur);
+      durationRef.current = dur;
+      setCurrentTime(0);
+      currentTimeRef.current = 0;
+      await getBridge().audioPlay(fp);
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+    } catch (e) {
+      console.error('[player] playTrackAsync error:', e);
+    }
+  }, []);
+
   const playIndex = useCallback((idx: number) => {
     if (idx < 0 || idx >= playlistRef.current.length) return undefined;
     currentIndexRef.current = idx;
     const fp = playlistRef.current[idx];
-    if (audioRef.current) {
-      audioRef.current.src = 'file:///' + fp.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1:');
-      audioRef.current.play();
-    }
+    playTrackAsync(fp);
     return fp;
-  }, []);
+  }, [playTrackAsync]);
 
   const addToPlaylist = useCallback((paths: string[]) => {
     for (const p of paths) {
@@ -140,17 +156,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     currentIndexRef.current = -1;
   }, []);
 
-  const play = useCallback(() => { audioRef.current?.play(); }, []);
-  const pause = useCallback(() => { audioRef.current?.pause(); }, []);
-  const toggle = useCallback(() => {
-    audioRef.current?.paused ? audioRef.current?.play() : audioRef.current?.pause();
-  }, []);
-  const stop = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+  const play = useCallback(() => {
+    const fp = playlistRef.current[currentIndexRef.current];
+    if (fp) {
+      getBridge().audioPlay(fp).then(() => {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+      }).catch(() => {});
     }
-    shuffleStackRef.current = [];
+  }, []);
+
+  const pause = useCallback(() => {
+    getBridge().audioPause().then(() => {
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+    }).catch(() => {});
+  }, []);
+
+  const toggle = useCallback(() => {
+    if (isPlayingRef.current) {
+      pause();
+    } else {
+      play();
+    }
+  }, [play, pause]);
+
+  const stop = useCallback(() => {
+    getBridge().audioStop().then(() => {
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      setCurrentTime(0);
+      currentTimeRef.current = 0;
+      shuffleStackRef.current = [];
+    }).catch(() => {});
   }, []);
 
   const next = useCallback(() => {
@@ -171,20 +209,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [playIndex]);
 
   const seek = useCallback((secs: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = Math.max(0, Math.min(audioRef.current.duration || 0, secs));
-    }
+    getBridge().audioSeek(secs).then(() => {
+      setCurrentTime(secs);
+      currentTimeRef.current = secs;
+    }).catch(() => {});
   }, []);
 
   const setVolume = useCallback((v: number) => {
-    const vol = Math.max(0, Math.min(1, v / 100));
-    if (audioRef.current) audioRef.current.volume = vol;
-    setVolumeState(v);
+    const vol = Math.max(0, Math.min(100, v));
+    setVolumeState(vol);
+    getBridge().setVolume(vol).catch(() => {});
   }, []);
 
-  const getVolume = useCallback(() => Math.round((audioRef.current?.volume ?? 0.8) * 100), []);
-  const getCurrentTime = useCallback(() => audioRef.current?.currentTime ?? 0, []);
-  const getDuration = useCallback(() => audioRef.current?.duration ?? 0, []);
+  const getVolume = useCallback(() => volume, [volume]);
+  const getCurrentTime = useCallback(() => currentTimeRef.current, []);
+  const getDuration = useCallback(() => durationRef.current, []);
 
   const setPlayMode = useCallback((mode: PlayMode) => {
     playModeRef.current = mode;
@@ -202,6 +241,55 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  // Polling: update position from Rust audio engine every 100ms
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const pos = await getBridge().getPosition();
+        const dur = await getBridge().getDuration();
+
+        if (dur > 0 && durationRef.current !== dur) {
+          setDuration(dur);
+          durationRef.current = dur;
+        }
+
+        setCurrentTime(pos);
+        currentTimeRef.current = pos;
+
+        // Check if track ended (position >= duration and duration > 0)
+        if (dur > 0 && pos >= dur - 0.1) {
+          // Track ended — handle play mode
+          if (playModeRef.current === 'repeat-one') {
+            playIndex(currentIndexRef.current);
+          } else if (playModeRef.current === 'shuffle') {
+            const idx = nextShuffleIndex();
+            if (idx >= 0) playIndex(idx);
+          } else if (playModeRef.current === 'repeat-all') {
+            playIndex((currentIndexRef.current + 1) % playlistRef.current.length);
+          } else {
+            const nextTrack = currentIndexRef.current + 1;
+            if (nextTrack < playlistRef.current.length) {
+              playIndex(nextTrack);
+            } else {
+              setIsPlaying(false);
+              isPlayingRef.current = false;
+            }
+          }
+          // Load lyrics for new track
+          const fp = playlistRef.current[currentIndexRef.current];
+          if (fp && loadLrcRef.current) loadLrcRef.current(fp);
+          endedCallbacksRef.current.forEach(fn => fn());
+        }
+      } catch {
+        // Bridge not available
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, playIndex, nextShuffleIndex]);
+
   // Lyrics methods
   const loadLRC = useCallback(async (mp3Path: string): Promise<boolean> => {
     setLyricsLines([]);
@@ -210,7 +298,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const filename = mp3Path.split(/[/\\]/).pop()!.replace(/\.[^.]+$/, '.lrc');
     const lrcPath = mp3Path.replace(/\.[^.]+$/, '.lrc');
-    let result: string | { error: string } = await window.musicPlayer.readFile(lrcPath);
+    let result: string | { error: string } = await getBridge().readFile(lrcPath);
 
     // 1. Try lrc/ subfolder in music folder
     if (hasError(result)) {
@@ -218,7 +306,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const musicFolder = s.musicFolder || '';
       if (musicFolder) {
         const lrcFolderPath = musicFolder.replace(/[/\\]$/, '') + '/lrc/' + filename;
-        const folderResult = await window.musicPlayer.readFile(lrcFolderPath);
+        const folderResult = await getBridge().readFile(lrcFolderPath);
         if (!hasError(folderResult)) result = folderResult;
       }
     }
@@ -228,7 +316,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const dir = mp3Path.substring(0, Math.max(mp3Path.lastIndexOf('/'), mp3Path.lastIndexOf('\\')));
       if (dir) {
         const siblingLrcPath = dir + '/lrc/' + filename;
-        const siblingResult = await window.musicPlayer.readFile(siblingLrcPath);
+        const siblingResult = await getBridge().readFile(siblingLrcPath);
         if (!hasError(siblingResult)) result = siblingResult;
       }
     }
@@ -238,8 +326,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const s = getStoredSettings();
       const musicFolder = s.musicFolder || '';
       if (musicFolder) {
-        const found = await window.musicPlayer.findLrc(mp3Path, musicFolder);
-        if (found && !hasError(found)) result = await window.musicPlayer.readFile(found);
+        const found = await getBridge().findLrc(mp3Path, musicFolder);
+        if (found && !hasError(found)) result = await getBridge().readFile(found);
       }
     }
 
@@ -247,38 +335,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (hasError(result)) {
       const dir = mp3Path.substring(0, Math.max(mp3Path.lastIndexOf('/'), mp3Path.lastIndexOf('\\')));
       if (dir) {
-        const found = await window.musicPlayer.findLrc(mp3Path, dir);
-        if (found && !hasError(found)) result = await window.musicPlayer.readFile(found);
+        const found = await getBridge().findLrc(mp3Path, dir);
+        if (found && !hasError(found)) result = await getBridge().readFile(found);
       }
     }
 
     if (hasError(result)) {
       console.log('[lrc] loadLRC: not found for', mp3Path);
       if (lyricsFloatingRef.current) {
-        window.musicPlayer.sendLyricsUpdate({ current: '', next: [] });
+        getBridge().sendLyricsUpdate({ current: '', next: [] });
       }
       return false;
     }
     const lines = parseLRC(result as string);
-    // Apply timing offset if configured for this track (safe: never fails on missing IPC)
+    // Apply timing offset if configured for this track
     try {
       const parentDir = mp3Path.substring(0, Math.max(mp3Path.lastIndexOf('/'), mp3Path.lastIndexOf('\\')));
-      const offsets = await window.musicPlayer.readLrcOffsets(parentDir + '/lrc');
+      const offsets = await getBridge().readLrcOffsets(parentDir + '/lrc');
       const trackName = (mp3Path.split(/[/\\]/).pop() || '').replace(/\.[^.]+$/, '.lrc');
       if (!hasError(offsets) && offsets[trackName]) {
         for (const l of lines) l.time += offsets[trackName] / 1000;
       }
-    } catch { /* offset feature unavailable (old preload) — ignore */ }
-    console.log('[lrc] loadLRC: found', lines.length, 'lines for', mp3Path);
+    } catch { /* offset feature unavailable — ignore */ }
+    // Skip past lines: playback may already be mid-song when LRC finishes loading.
+    const curPos = currentTimeRef.current;
+    const startIdx = getCurrentLineIdx(lines, curPos);
+    lastPrintedIdxRef.current = startIdx;
+    // Print the currently-active line so the terminal isn't empty.
+    if (startIdx >= 0 && startIdx < lines.length) {
+      const printFn = lyricPrinterRef.current;
+      if (printFn) printFn(lines[startIdx].text, 'lyric');
+    }
+    console.log('[lrc] loadLRC: found', lines.length, 'lines for', mp3Path,
+      'startIdx:', startIdx, 'curPos:', curPos);
     setLyricsLines(lines);
     return lines.length > 0;
   }, []);
-  // Keep ref synced so onEnded can call loadLRC
+  // Keep ref synced so polling can call loadLRC
   useEffect(() => { loadLrcRef.current = loadLRC; }, [loadLRC]);
 
   const sendLyricsToFloating = useCallback((time: number) => {
     if (lyricsLines.length === 0) {
-      window.musicPlayer.sendLyricsUpdate({ current: '', next: [] });
+      getBridge().sendLyricsUpdate({ current: '', next: [] });
       return;
     }
     const curIdx = getCurrentLineIdx(lyricsLines, time);
@@ -290,7 +388,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     for (let i = 1; i <= count && curIdx + i < lyricsLines.length; i++) {
       next.push(lyricsLines[curIdx + i].text);
     }
-    window.musicPlayer.sendLyricsUpdate({ current, next });
+    getBridge().sendLyricsUpdate({ current, next });
   }, [lyricsLines]);
 
   const updateLyrics = useCallback((time: number) => {
@@ -316,6 +414,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [lyricsLines, sendLyricsToFloating]);
 
+  // Drive lyrics from time updates
+  useEffect(() => {
+    updateLyrics(currentTime);
+  }, [currentTime, updateLyrics]);
+
   // Terminal lyrics toggle
   const setLyricsTerminal = useCallback(async (v: boolean) => {
     lyricsTerminalRef.current = v;
@@ -337,12 +440,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     lyricsFloatingRef.current = v;
     setLyricsFloatingState(v);
     if (v) {
-      try { await window.musicPlayer.showFloatingLyrics(); } catch {}
-      // Force-sync lyrics settings 200ms after opening (blunt but reliable)
+      try { await getBridge().showFloatingLyrics(); } catch {}
+      // Force-sync lyrics settings 200ms after opening
       setTimeout(() => {
         const s2 = getStoredSettings();
         const baseFonts = '"Consolas", "Courier New", "Fira Code", monospace';
-        window.musicPlayer.sendLyricsTheme({
+        getBridge().sendLyricsTheme({
           font: s2.customFont ? `"${s2.customFont}", ${baseFonts}` : baseFonts,
           fontSize: s2.fontSize || 14, fg: s2.fg, fgDim: s2['fg-dim'],
           accent: s2.accent, bg: s2.bg,
@@ -358,7 +461,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         });
       }, 200);
     } else {
-      try { await window.musicPlayer.hideFloatingLyrics(); } catch {}
+      try { await getBridge().hideFloatingLyrics(); } catch {}
     }
     try { saveSettingsToStore({ ...getStoredSettings(), lyricsFloating: v }); } catch {}
   }, []);
@@ -366,55 +469,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const toggleFloatingLyrics = useCallback(async () => {
     await setLyricsFloating(!lyricsFloatingRef.current);
   }, [setLyricsFloating]);
-
-  // Drive lyrics + progress from time updates
-  useEffect(() => {
-    updateLyrics(currentTime);
-  }, [currentTime, updateLyrics]);
-
-  // Audio element setup
-  const audioElement = useRef(<audio
-    ref={audioRef}
-    id="audio"
-    playsInline
-    onTimeUpdate={() => {
-      const t = audioRef.current?.currentTime ?? 0;
-      setCurrentTime(t);
-    }}
-    onLoadedMetadata={() => {
-      setDuration(audioRef.current?.duration ?? 0);
-    }}
-    onPlay={() => setIsPlaying(true)}
-    onPause={() => setIsPlaying(false)}
-    onEnded={() => {
-      if (playModeRef.current === 'repeat-one') {
-        playIndex(currentIndexRef.current);
-      } else if (playModeRef.current === 'shuffle') {
-        const idx = nextShuffleIndex();
-        if (idx >= 0) playIndex(idx);
-      } else if (playModeRef.current === 'repeat-all') {
-        playIndex((currentIndexRef.current + 1) % playlistRef.current.length);
-      } else {
-        const nextTrack = currentIndexRef.current + 1;
-        if (nextTrack < playlistRef.current.length) playIndex(nextTrack);
-      }
-      // Load lyrics for the new track
-      const fp = playlistRef.current[currentIndexRef.current];
-      if (fp && loadLrcRef.current) loadLrcRef.current(fp);
-      endedCallbacksRef.current.forEach(fn => fn());
-    }}
-    onError={() => {
-      const code = audioRef.current?.error?.code ?? '';
-      // Error is handled via command output
-    }}
-  />);
-
-  // Restore volume on audio element ready
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume / 100;
-    }
-  }, []);
 
   const s = getStoredSettings();
 
@@ -440,7 +494,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       progressWidth: s.progressWidth,
       registerLyricPrinter,
     }}>
-      {audioElement.current}
       {children}
     </PlayerContext.Provider>
   );
