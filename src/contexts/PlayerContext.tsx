@@ -357,17 +357,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         for (const l of lines) l.time += offsets[trackName] / 1000;
       }
     } catch { /* offset feature unavailable — ignore */ }
-    // Skip past lines: playback may already be mid-song when LRC finishes loading.
+    // Skip past lines if playback is mid-song; reset if track just started
+    // or position is stale from a previous track (auto-advance).
     const curPos = currentTimeRef.current;
-    const startIdx = getCurrentLineIdx(lines, curPos);
-    lastPrintedIdxRef.current = startIdx;
-    // Print the currently-active line so the terminal isn't empty.
-    if (startIdx >= 0 && startIdx < lines.length) {
-      const printFn = lyricPrinterRef.current;
-      if (printFn) printFn(lines[startIdx].text, 'lyric');
+    const dur = durationRef.current;
+    if (curPos < 0.5 || curPos > dur + 1.0) {
+      // Track just started or position is stale — start from beginning.
+      lastPrintedIdxRef.current = -1;
+    } else {
+      const startIdx = getCurrentLineIdx(lines, curPos);
+      lastPrintedIdxRef.current = startIdx;
+      if (startIdx >= 0 && startIdx < lines.length) {
+        const printFn = lyricPrinterRef.current;
+        if (printFn) printFn(lines[startIdx].text, 'lyric');
+      }
     }
     console.log('[lrc] loadLRC: found', lines.length, 'lines for', mp3Path,
-      'startIdx:', startIdx, 'curPos:', curPos);
+      'lastIdx:', lastPrintedIdxRef.current, 'curPos:', curPos, 'dur:', dur);
     setLyricsLines(lines);
     return lines.length > 0;
   }, []);
