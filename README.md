@@ -10,20 +10,22 @@
 
 ### 简介
 
-MusicLI 是一款**拟终端命令行风格**的桌面音乐播放器，使用 Electron + React + TypeScript 构建。支持 MP3/FLAC/WAV/OGG/M4A 等格式、ID3 元数据解析、LRC 歌词显示（终端内嵌 + 悬浮桌面歌词），可自由配置的主题系统。
+MusicLI 是一款**拟终端命令行风格**的桌面音乐播放器，使用 Tauri v2 + Rust + React + TypeScript 构建。音频引擎基于 Symphonia 解码 + cpal 输出，支持 WASAPI（共享/默认）和 ASIO（独占）模式。支持 MP3/FLAC/WAV/OGG/M4A 等格式、ID3 元数据解析、LRC 歌词显示（终端内嵌 + 透明悬浮桌面歌词）、主题系统和歌单分享。
 
 ### 特性
 
 - **命令行风格界面** — 键入命令控制一切，方向键历史
+- **Rust 音频引擎** — Symphonia 解码 → rubato 重采样 → cpal 输出，支持 WASAPI/ASIO
 - **多种播放模式** — 顺序 / 单曲循环 / 列表循环 / 随机
 - **LRC 歌词** — 终端内嵌 + 透明悬浮桌面歌词，竖排/横排、颜色/大小/阴影/对齐全可配
+- **子目录歌词检索** — 递归搜索音乐文件夹和 MP3 父目录
 - **歌词时序偏移** — 每首歌独立调整 LRC 偏移，自动保存
 - **歌单管理** — 创建/编辑/切换歌单，批量导入，模糊搜索
 - **元数据展示** — ID3 标签，显示专辑、年份、码率等
 - **主题系统** — 内置暗色 / Claude Desktop 主题，支持导入导出
-- **外观定制** — 自定义字体、背景图片、模糊度、进度条
+- **外观定制** — 自定义字体、背景图片、模糊度、进度条、窗口圆角
 - **三语言** — 简体中文 / English / 日本語
-- **跨平台** — Windows / Linux 
+- **跨平台** — Windows / Linux / macOS
 - **歌单分享 (Sync)** — ZIP 打包（音频 + LRC + 元数据），跨设备导入
 - **配置持久化** — JSON 文件存储在音乐文件夹 `config/` 目录下，可手动编辑
 
@@ -31,19 +33,30 @@ MusicLI 是一款**拟终端命令行风格**的桌面音乐播放器，使用 E
 
 从 [Releases](../../releases) 下载：
 
-- **Windows**: `MusicLI 2.X.X.exe`（便携版）或 `MusicLI-2.X.X-win.zip`
-- **Linux**: `musicli-2.X.X.tar.gz`（解压后运行 `./musicli`）
+- **Windows**: `MusicLI_3.0.0_x64-setup.exe` 或 `MusicLI_3.0.0_x64_en-US.msi`
+- **Linux**: `musicli_3.0.0_amd64.deb` 或 `MusicLI_3.0.0_amd64.AppImage`
 
 ### 从源码构建
+
+**前置要求**
+- [Rust 工具链](https://rustup.rs)
+- [LLVM/Clang](https://github.com/llvm/llvm-project/releases) — ASIO SDK 编译需要（Windows）
+- [Node.js](https://nodejs.org) 22+
+- [pnpm](https://pnpm.io)
 
 ```bash
 git clone https://github.com/KirariNeko/MusicLI.git
 cd MusicLI
 pnpm install
-pnpm start                 # 开发模式
-pnpm electron:build:win    # Windows
-pnpm electron:build:linux  # Linux
-pnpm electron:build:mac    # macOS（需在 macOS 上运行）
+
+# 开发模式（仅前端，无原生 IPC）
+pnpm dev
+
+# 完整 Tauri 开发（启动 Vite + Tauri 窗口）
+pnpm tauri dev
+
+# 生产构建
+pnpm tauri build
 ```
 
 ### 命令
@@ -52,19 +65,21 @@ pnpm electron:build:mac    # macOS（需在 macOS 上运行）
 | 命令 | 说明 |
 |------|------|
 | `open` | 选择音频文件 |
-| `folder` | 打开文件夹加载全部音频 |
+| `folder` / `open dir` | 打开文件夹加载全部音频 |
 | `import` | 导入至歌单（搜索 + 多选） |
 
 #### 播放
 | 命令 | 说明 |
 |------|------|
-| `play [n\|name]` | 播放 / 恢复 （模糊搜索） |
+| `play [n\|name]` | 播放 / 恢复（模糊搜索） |
 | `pause` / `stop` | 暂停 / 停止 |
 | `next` / `prev` | 下一首 / 上一首 |
 | `mode` | 循环模式 |
 | `vol <0-100>` | 音量 |
 | `seek [sec]` | 跳转；无参数进入方向键模式 |
 | `bar` | 进度条 |
+| `audio mode [normal\|asio]` | 音频输出模式 |
+| `audio devices` | 列出音频设备 |
 
 #### 歌词
 | 命令 | 说明 |
@@ -152,7 +167,7 @@ Music/config/
 
 ### 技术栈
 
-Electron 32 · React 19 · TypeScript · Vite 8 · music-metadata · adm-zip
+Tauri v2 · Rust 2021 · React 19 · TypeScript · Vite 8 · Symphonia · cpal · rubato · Lofty
 
 ---
 
@@ -160,16 +175,29 @@ Electron 32 · React 19 · TypeScript · Vite 8 · music-metadata · adm-zip
 
 ### Overview
 
-MusicLI is a **pseudo-CLI terminal-style** desktop music player. Built with Electron + React + TypeScript. Supports MP3/FLAC/WAV/OGG/M4A, ID3 metadata, LRC lyrics (inline terminal + floating desktop overlay), plus powerful configuration and theming.
+MusicLI is a **pseudo-CLI terminal-style** desktop music player. Built with Tauri v2 + Rust + React + TypeScript. The audio engine uses Symphonia for decoding and cpal for output, with rubato sample rate conversion. Supports MP3/FLAC/WAV/OGG/M4A, ID3 metadata, LRC lyrics (inline terminal + floating desktop overlay), themes, and playlist sharing.
 
 ### Quick Start
 
+**Prerequisites**
+- [Rust toolchain](https://rustup.rs)
+- [LLVM/Clang](https://github.com/llvm/llvm-project/releases) — Required for ASIO SDK build (Windows)
+- [Node.js](https://nodejs.org) 22+
+- [pnpm](https://pnpm.io)
+
 ```bash
 git clone https://github.com/KirariNeko/MusicLI.git
-cd MusicLI && pnpm install && pnpm start
+cd MusicLI
+pnpm install
+pnpm tauri dev     # Full Tauri app (Vite + native window)
+pnpm tauri build   # Production build
 ```
 
 Type `help` for all commands. Type `lang en` for English UI.
+
+### Tech Stack
+
+Tauri v2 · Rust 2021 · React 19 · TypeScript · Vite 8 · Symphonia · cpal · rubato · Lofty
 
 ### License
 
