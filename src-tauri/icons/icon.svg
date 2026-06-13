@@ -11,10 +11,14 @@
   </defs>
   <!-- background -->
   <rect width="128" height="128" rx="24" fill="url(#bg)"/>
-  <!-- music note ♪ -->
-  <text x="64" y="98" text-anchor="middle"
-        font-family="serif" font-size="96" font-weight="bold"
-        fill="url(#note)">♪</text>
+  <!-- <bracket>♪</bracket> -->
+  <text x="64" y="94" text-anchor="middle"
+        font-family="'Courier New', 'Consolas', monospace" font-size="64" font-weight="bold"
+        fill="url(#note)">
+    <tspan fill="#888888" font-weight="normal">&lt;</tspan>
+    <tspan>♪</tspan>
+    <tspan fill="#888888" font-weight="normal">&gt;</tspan>
+  </text>
   <!-- subtle glow ring -->
   <rect width="128" height="128" rx="24" fill="none"
         stroke="#b1b9f9" stroke-width="1.5" stroke-opacity="0.15"/>
