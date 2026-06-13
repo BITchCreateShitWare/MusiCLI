@@ -251,7 +251,7 @@ export const dict: Record<Lang, Dict> = {
     plSharer: 'Shared by',
   },
   zh: {
-    banner: '====================================\n   Musicli V${v}\n   输入 <cmd>help</cmd> 查看可用命令\n====================================',
+    banner: `====================================\n   Musicli V${v}\n   输入 <cmd>help</cmd> 查看可用命令\n====================================`,
     noTrack: '未加载音乐',
     vol: '音量',
     nowPlaying: '> 正在播放',
@@ -481,7 +481,7 @@ export const dict: Record<Lang, Dict> = {
     plSharer: '分享者',
   },
   ja: {
-    banner: '====================================\n   Musicli V${v}\n   <cmd>help</cmd> で使用可能なコマンドを表示\n====================================',
+    banner: `====================================\n   Musicli V${v}\n   <cmd>help</cmd> で使用可能なコマンドを表示\n====================================`,
     noTrack: '未ロード',
     vol: '音量',
     nowPlaying: '> 再生中',
