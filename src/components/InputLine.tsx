@@ -3,11 +3,45 @@ import { useTerminal, filterItems, getVisibleIdxFn } from '../contexts/TerminalC
 import { usePlayer } from '../contexts/PlayerContext';
 import { usePlaylists } from '../contexts/PlaylistContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { getCommand } from '../commands/registry';
+import { getCommand, getAllCommandNames } from '../commands/registry';
+import { subCompletions } from '../commands/completions';
 import { setCommandContext, type CommandContext } from '../commands/handlers';
 import { escapeHtml } from '../utils/format';
 import { t } from '../i18n';
 import { getBridge } from '../bridge';
+
+function getCommonPrefix(strings: string[]): string {
+  if (strings.length === 0) return '';
+  let prefix = strings[0];
+  for (let i = 1; i < strings.length; i++) {
+    while (!strings[i].startsWith(prefix) && prefix.length > 0) {
+      prefix = prefix.slice(0, -1);
+    }
+    if (prefix.length === 0) break;
+  }
+  return prefix;
+}
+
+function replaceWordAtCursor(input: HTMLInputElement, newWord: string) {
+  const value = input.value;
+  const pos = input.selectionStart ?? value.length;
+  const matches = [...value.matchAll(/\S+/g)];
+  let targetIdx = -1;
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (pos >= m.index! && pos <= m.index! + m[0].length) {
+      targetIdx = i;
+      break;
+    }
+  }
+  if (targetIdx === -1) return;
+  const m = matches[targetIdx];
+  const before = value.slice(0, m.index!);
+  const after = value.slice(m.index! + m[0].length);
+  input.value = before + newWord + after;
+  const newPos = before.length + newWord.length;
+  input.setSelectionRange(newPos, newPos);
+}
 
 export function InputLine() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +95,7 @@ export function InputLine() {
     setLyricsFloating: player.setLyricsFloating,
 
     saveSettings: (partial) => settings.saveSettings(partial),
+    resetSettings: settings.resetSettings,
     applyTheme: (name) => settings.applyTheme(name),
 
     replaceCurrentTracks: playlists.replaceCurrentTracks,
@@ -218,7 +253,94 @@ export function InputLine() {
       terminal.exitSelectMode();
     }
 
-    // Normal mode
+    // Tab-completion interactive mode
+    if (terminal.completeMode) {
+      const candidates = terminal.completeCandidates;
+      const idx = terminal.completeIdx;
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const newIdx = (idx - 1 + candidates.length) % candidates.length;
+        terminal.setCompleteIdx(newIdx);
+        if (inputRef.current) replaceWordAtCursor(inputRef.current, candidates[newIdx]);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const newIdx = (idx + 1) % candidates.length;
+        terminal.setCompleteIdx(newIdx);
+        if (inputRef.current) replaceWordAtCursor(inputRef.current, candidates[newIdx]);
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const newIdx = (idx + 1) % candidates.length;
+        terminal.setCompleteIdx(newIdx);
+        if (inputRef.current) replaceWordAtCursor(inputRef.current, candidates[newIdx]);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        terminal.exitCompleteMode();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        terminal.exitCompleteMode();
+        return;
+      }
+      // Any other key: exit completeMode, let it pass through
+      terminal.exitCompleteMode();
+    }
+
+    // Normal mode — Tab completion
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const input = inputRef.current;
+      if (!input) return;
+      const value = input.value;
+      const pos = input.selectionStart ?? value.length;
+
+      const wordMatches = [...value.matchAll(/\S+/g)];
+      let wordIdx = -1;
+      for (let i = 0; i < wordMatches.length; i++) {
+        const m = wordMatches[i];
+        if (pos >= m.index! && pos <= m.index! + m[0].length) {
+          wordIdx = i;
+          break;
+        }
+      }
+
+      const currentWord = wordIdx >= 0 ? wordMatches[wordIdx][0] : '';
+      const chain = wordMatches.slice(0, wordIdx).map(m => m[0].toLowerCase()).join(' ');
+
+      const allCandidates: string[] | undefined = chain
+        ? subCompletions[chain]
+        : getAllCommandNames();
+
+      if (!allCandidates) return;
+
+      if (!currentWord) {
+        terminal.enterCompleteMode([...allCandidates].sort());
+        return;
+      }
+
+      const matches = allCandidates.filter(n => n.startsWith(currentWord.toLowerCase()));
+      if (matches.length === 0) return;
+
+      if (matches.length === 1) {
+        replaceWordAtCursor(input, matches[0]);
+        return;
+      }
+
+      const sorted = [...matches].sort();
+      terminal.enterCompleteMode(sorted);
+      const common = getCommonPrefix(sorted);
+      if (common.length > currentWord.length) {
+        replaceWordAtCursor(input, common);
+      }
+      return;
+    }
+
     if (e.key === 'Enter') {
       const cmd = inputRef.current?.value ?? '';
       if (cmd.trim()) {

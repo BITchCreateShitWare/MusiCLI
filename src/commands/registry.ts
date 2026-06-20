@@ -17,3 +17,7 @@ export function register(name: string, aliases: string[], handler: (args: string
 export function getCommand(cmdName: string): Command | undefined {
   return commands[cmdName.toLowerCase()];
 }
+
+export function getAllCommandNames(): string[] {
+  return Object.keys(commands);
+}

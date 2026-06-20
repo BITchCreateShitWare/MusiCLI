@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { PlayMode, LrcLine } from '../types';
-import { getStoredSettings, SHADOW_PRESETS } from './SettingsContext';
+import { getStoredSettings, SHADOW_PRESETS, useSettings } from './SettingsContext';
 import { saveSettings as saveSettingsToStore } from '../configStore';
 import { parseLRC, getCurrentLineIdx } from '../utils/lrc';
 import { getBridge } from '../bridge';
@@ -59,6 +59,7 @@ interface PlayerContextValue {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
+  const settings = useSettings();
   const playlistRef = useRef<string[]>([]);
   const currentIndexRef = useRef(-1);
   const [currentTime, setCurrentTime] = useState(0);
@@ -80,6 +81,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const isPlayingRef = useRef(false);
   const durationRef = useRef(0);
   const currentTimeRef = useRef(0);
+  const lrcPathRef = useRef('');
+  const autoNextGuardRef = useRef(false);
 
   const registerLyricPrinter = useCallback((fn: (text: string, className?: string) => void) => {
     lyricPrinterRef.current = fn;
@@ -102,6 +105,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setLyricsFloatingState(true);
       lyricsFloatingRef.current = true;
       try { getBridge().showFloatingLyrics(); } catch {}
+      // Force-refresh floating lyrics config
+      setTimeout(() => {
+        const cycle: Array<'off' | 'rl' | 'lr'> = ['off', 'rl', 'lr'];
+        const cur = getStoredSettings().lyricsVertical || 'off';
+        let step = 0;
+        const tick = () => {
+          step++;
+          const next = cycle[(cycle.indexOf(cur as 'off'|'rl'|'lr') + step) % 3];
+          settings.saveSettings({ lyricsVertical: next });
+          if (step < 3) setTimeout(tick, 150);
+        };
+        tick();
+      }, 600);
     }
   }, []);
 
@@ -258,8 +274,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setCurrentTime(pos);
         currentTimeRef.current = pos;
 
+        // Release auto-next guard when new track playback has begun
+        if (pos < dur - 0.5 && autoNextGuardRef.current) {
+          autoNextGuardRef.current = false;
+        }
+
         // Check if track ended (position >= duration and duration > 0)
         if (dur > 0 && pos >= dur - 0.1) {
+          if (autoNextGuardRef.current) return;
+          autoNextGuardRef.current = true;
           // Track ended — handle play mode
           if (playModeRef.current === 'repeat-one') {
             playIndex(currentIndexRef.current);
@@ -361,13 +384,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // or position is stale from a previous track (auto-advance).
     const curPos = currentTimeRef.current;
     const dur = durationRef.current;
-    if (curPos < 0.5 || curPos > dur + 1.0) {
+    const trackSwitched = mp3Path !== lrcPathRef.current;
+    lrcPathRef.current = mp3Path;
+    if (curPos < 0.5 || curPos > dur + 1.0 || trackSwitched) {
       // Track just started or position is stale — start from beginning.
       lastPrintedIdxRef.current = -1;
+      if (trackSwitched) {
+        setCurrentTime(0);
+        currentTimeRef.current = 0;
+      }
     } else {
       const startIdx = getCurrentLineIdx(lines, curPos);
       lastPrintedIdxRef.current = startIdx;
-      if (startIdx >= 0 && startIdx < lines.length) {
+      if (startIdx >= 0 && startIdx < lines.length && lyricsTerminalRef.current) {
         const printFn = lyricPrinterRef.current;
         if (printFn) printFn(lines[startIdx].text, 'lyric');
       }
@@ -412,6 +441,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         } else break;
       }
       if (newIdx > lastPrintedIdxRef.current) {
+        // Guard against stale time causing bulk-print on track switch
+        if (newIdx - lastPrintedIdxRef.current > 10) {
+          lastPrintedIdxRef.current = newIdx;
+          return;
+        }
         for (let i = lastPrintedIdxRef.current + 1; i <= newIdx; i++) {
           printFn(lyricsLines[i].text, i === newIdx ? 'lyric' : 'dim');
         }

@@ -52,6 +52,13 @@ interface TerminalContextValue {
   seekMode: boolean;
   enterSeekMode: () => void;
   exitSeekMode: () => void;
+  // Tab-completion mode
+  completeMode: boolean;
+  completeCandidates: string[];
+  completeIdx: number;
+  enterCompleteMode: (candidates: string[]) => void;
+  exitCompleteMode: () => void;
+  setCompleteIdx: (idx: number) => void;
 }
 
 let nextId = 1;
@@ -70,6 +77,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const imodeCallbackRef = useRef<InteractiveCallback | null>(null);
   const itemsRef = useRef<InteractiveItem[]>([]);
   const [seekMode, setSeekMode] = useState(false);
+  const [completeMode, setCompleteMode] = useState(false);
+  const [completeCandidates, setCompleteCandidates] = useState<string[]>([]);
+  const [completeIdx, setCompleteIdx] = useState(0);
 
   // Keep ref in sync with state so moveCursor can read latest value
   useEffect(() => { itemsRef.current = items; }, [items]);
@@ -118,7 +128,6 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     printLine('  ' + t('helpGroupFile'), 'dim');
     printRaw('    open                  ' + t('helpOpen'));
     printRaw('    open dir              ' + t('helpFolder'));
-    printRaw('    import                ' + t('helpImport'));
     printLine('  ' + t('helpGroupPlayback'), 'dim');
     printRaw('    play [n|name]         ' + t('helpPlay'));
     printRaw('    pause | stop          ' + t('helpPause') + ' / ' + t('helpStop'));
@@ -144,6 +153,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     printRaw('    cd [name]             ' + t('helpCd'));
     printRaw('    pl create|list|delete|edit|info');
     printRaw('    track info|pl <n>     ' + t('helpTrack'));
+    printRaw('    import                ' + t('helpImport'));
     printLine('  ' + t('helpGroupAppearance'), 'dim');
     printRaw('    set vol <0-100>       ' + t('helpVol'));
     printRaw('    colors                ' + t('helpColors'));
@@ -152,8 +162,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     printRaw('    set blur <0-50>       ' + t('helpBlur'));
     printRaw('    set font size|weight|import|clear');
     printRaw('    set maxlines <n>      ' + t('helpMaxlines'));
-    printRaw('    theme list|save|load|delete|export|import  ' + t('helpTheme'));
-    printRaw('    sync pl|theme export|import  ' + t('helpSync'));
+    printRaw('    sync theme save|load|list|delete|export|import  ' + t('helpSync'));
     printLine('  ' + t('helpGroupSystem'), 'dim');
     printRaw('    lang <en|zh|ja>       ' + t('helpLang'));
     printRaw('    reset                 ' + t('helpReset'));
@@ -208,6 +217,21 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     setSeekMode(false);
   }, []);
 
+  const enterCompleteMode = useCallback((candidates: string[]) => {
+    setCompleteMode(true);
+    setCompleteCandidates(candidates);
+    setCompleteIdx(0);
+    setSelectMode(false);
+    setImode(null);
+    setSeekMode(false);
+  }, []);
+
+  const exitCompleteMode = useCallback(() => {
+    setCompleteMode(false);
+    setCompleteCandidates([]);
+    setCompleteIdx(0);
+  }, []);
+
   const toggleIitem = useCallback((idx: number) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it));
   }, []);
@@ -250,6 +274,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       seekMode,
       enterSeekMode,
       exitSeekMode,
+      completeMode, completeCandidates, completeIdx,
+      enterCompleteMode, exitCompleteMode, setCompleteIdx,
     }}>
       {children}
     </TerminalContext.Provider>

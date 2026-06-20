@@ -8,6 +8,7 @@ export function SelectList() {
     selectMode, selectCandidates, selectIdx, setSelectIdx,
     imode, iitems, iidx, ifilter,
     moveCursor,
+    completeMode, completeCandidates, completeIdx, setCompleteIdx,
   } = useTerminal();
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -24,15 +25,20 @@ export function SelectList() {
     e.preventDefault();
     if (imode) {
       moveCursor(e.deltaY > 0 ? 1 : -1);
+    } else if (completeMode && completeCandidates.length > 0) {
+      setCompleteIdx(Math.max(0, Math.min(
+        completeCandidates.length - 1,
+        completeIdx + (e.deltaY > 0 ? 1 : -1)
+      )));
     } else if (selectMode && selectCandidates.length > 0) {
       setSelectIdx(Math.max(0, Math.min(
         selectCandidates.length - 1,
         selectIdx + (e.deltaY > 0 ? 1 : -1)
       )));
     }
-  }, [imode, selectMode, selectCandidates.length, selectIdx, moveCursor, setSelectIdx]);
+  }, [imode, completeMode, completeCandidates.length, completeIdx, setCompleteIdx, selectMode, selectCandidates.length, selectIdx, moveCursor, setSelectIdx]);
 
-  const visible = selectMode || imode !== null;
+  const visible = selectMode || imode !== null || completeMode;
   if (!visible) return null;
 
   let html = '';
@@ -54,6 +60,14 @@ export function SelectList() {
     }
     html += '<div class="sep-line"></div>';
     html += escapeHtml(imode === 'import' ? t('importHint') : t('trackPlHint'));
+  } else if (completeMode) {
+    html += `<cmd>${t('completionTitle')}</cmd><br><div class="sep-line"></div>`;
+    for (let i = 0; i < completeCandidates.length; i++) {
+      const name = completeCandidates[i];
+      const marker = i === completeIdx ? '>' : ' ';
+      const cls = i === completeIdx ? ' class="imode-cursor"' : '';
+      html += `<div${cls}>${marker} ${escapeHtml(name)}</div>`;
+    }
   } else if (selectMode) {
     for (let i = 0; i < selectCandidates.length; i++) {
       const c = selectCandidates[i];

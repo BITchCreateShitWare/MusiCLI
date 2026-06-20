@@ -1,12 +1,11 @@
 import { register } from './registry';
 import { t } from '../i18n';
 import { getStoredSettings } from '../contexts/SettingsContext';
-import { setMusicFolder } from '../configStore';
 import { fuzzySearch } from '../utils/fuzzy';
 import { escapeHtml, formatTime, getFileName } from '../utils/format';
 import { darken } from '../utils/color';
 import { getBridge } from '../bridge';
-import type { SelectCandidate, InteractiveItem, MetadataResult, Theme, LyricsMode } from '../types';
+import type { SelectCandidate, InteractiveItem, MetadataResult, Theme } from '../types';
 
 function hasError(obj: unknown): obj is { error: string } {
   return typeof obj === 'object' && obj !== null && 'error' in obj;
@@ -63,6 +62,7 @@ export interface CommandContext {
 
   // Settings
   saveSettings: (partial: Record<string, unknown>) => void;
+  resetSettings: () => void;
   applyTheme: (name: string) => boolean;
 
   // Playlists
@@ -335,20 +335,6 @@ export function registerAllCommands() {
       c.printLine(t('cdSwitched', { name: pl.name, n: pl.tracks.length }), 'success');
     }
   }, 'helpCd');
-
-  // folder
-  register('folder', ['dir', 'opendir'], async () => {
-    const c = ctx();
-    const dirPath = await getBridge().selectFolder();
-    if (!dirPath) { c.printLine(t('folderNoSelect'), 'info'); return; }
-    const files = await getBridge().listAudioFiles(dirPath);
-    if ('error' in files) { c.printLine(t('metadataError', { err: files.error }), 'error'); return; }
-    if (!files || files.length === 0) { c.printLine(t('folderEmpty'), 'info'); return; }
-    c.replaceCurrentTracks(files);
-    c.saveSettings({ musicFolder: dirPath });
-    setMusicFolder(dirPath);
-    c.printLine(t('folderLoaded', { n: files.length }) + '  ' + t('typePlay'), 'info');
-  }, 'helpFolder');
 
   // import
   register('import', ['batch'], async () => {
@@ -737,90 +723,6 @@ export function registerAllCommands() {
     c.printLine(t('seekModeEnter', { step }), 'success');
   }, 'helpSeek');
 
-  // theme
-  register('theme', [], async (args) => {
-    const c = ctx();
-    const sub = (args[0] || '').toLowerCase();
-    const rest = args.slice(1);
-
-    if (sub === 'save') {
-      if (rest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
-      c.saveCurrentTheme(rest.join(' '));
-      c.printLine(t('themeSaved', { name: rest.join(' ') }), 'success');
-    } else if (sub === 'load' || sub === 'apply' || sub === 'switch') {
-      if (rest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
-      const name = rest.join(' ');
-      if (c.applyTheme(name)) c.printLine(t('themeLoaded', { name }), 'success');
-      else c.printLine(t('themeNotFound'), 'error');
-    } else if (sub === 'list' || sub === 'ls') {
-      const names = c.themeNames();
-      c.printList(t('themeList') + ' (' + names.length + ')', names.map(n => {
-        const theme = c.getTheme(n);
-        return { name: n, meta: theme ? theme.fg + '  ' + theme.accent : '', highlight: false };
-      }));
-    } else if (sub === 'delete' || sub === 'rm' || sub === 'del') {
-      if (rest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
-      const name = rest.join(' ');
-      const r = c.deleteTheme(name);
-      if (r.error === 'notFound') c.printLine(t('themeNotFound'), 'error');
-      else if (r.error === 'builtin') c.printLine(t('themeDeleteBuiltin'), 'error');
-      else c.printLine(t('themeDeleted', { name }), 'success');
-    } else if (sub === 'export') {
-      if (rest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
-      const name = rest.join(' ');
-      const theme = c.exportTheme(name);
-      if (!theme) { c.printLine(t('themeNotFound'), 'error'); return; }
-      // Add bg-img-data if missing
-      if (!theme['bg-img-data']) {
-        const s = getStoredSettings();
-        const imgPath = s['bg-img'];
-        if (imgPath) {
-          try {
-            const b64 = await getBridge().readFileBase64(imgPath);
-            if (!hasError(b64)) theme['bg-img-data'] = b64;
-          } catch { /* ignore */ }
-        }
-      }
-      const jsonStr = JSON.stringify(theme, null, 2);
-      const savePath = await getBridge().saveFileDialog(name + '.json');
-      if (!savePath) return;
-      const wr = await getBridge().writeFile(savePath, jsonStr);
-      if (wr.error) { c.printLine(wr.error, 'error'); return; }
-      c.printLine(t('themeExported'), 'success');
-    } else if (sub === 'import') {
-      const filePath = await getBridge().openThemeDialog();
-      if (!filePath) return;
-      const result = await getBridge().readFile(filePath);
-      if (hasError(result) || !result) { c.printLine(t('themeImportError'), 'error'); return; }
-      // Import logic inline
-      try {
-        const theme = JSON.parse(result);
-        if (!theme.name) { c.printLine(t('themeImportError'), 'error'); return; }
-        c.saveCurrentTheme(theme.name);
-        c.printLine(t('themeImported', { name: theme.name }), 'success');
-      } catch { c.printLine(t('themeImportError'), 'error'); }
-    } else if (/^\d+$/.test(sub)) {
-      const idx = parseInt(sub, 10) - 1;
-      const names = c.themeNames();
-      if (idx >= 0 && idx < names.length) {
-        if (c.applyTheme(names[idx])) c.printLine(t('themeLoaded', { name: names[idx] }), 'success');
-      } else c.printLine(t('themeNotFound'), 'error');
-    } else if (!sub) {
-      const names = c.themeNames();
-      if (names.length === 0) { c.printLine(t('themeNotFound'), 'info'); return; }
-      c.printLine(`<cmd>${t('themeList')} (${names.length})</cmd>`, 'accent');
-      for (let i = 0; i < names.length; i++) {
-        const theme = c.getTheme(names[i]);
-        const fgSpan = `<span style="color:${theme?.fg ?? '#fff'}">text</span>`;
-        const accentSpan = `<span style="color:${theme?.accent ?? '#888'}">accent</span>`;
-        c.printLine(`  ${i + 1}. ${names[i]}  [${fgSpan}  ${accentSpan}]`);
-      }
-      c.printLine(t('themeSwitchHint'), 'dim');
-    } else {
-      c.printLine(t('themeUsage'), 'info');
-    }
-  }, 'helpTheme');
-
   // lang
   register('lang', ['language', 'locale'], (args) => {
     const c = ctx();
@@ -1108,9 +1010,33 @@ export function registerAllCommands() {
       }
     } else if (sub === 'theme') {
       const action = (rest[0] || '').toLowerCase();
-      const name = rest.slice(1).join(' ');
-      if (action === 'export') {
-        const theme = name ? c.exportTheme(name) : c.exportTheme(c.themeNames()[0] || '');
+      const themeRest = rest.slice(1);
+
+      if (action === 'save') {
+        if (themeRest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
+        c.saveCurrentTheme(themeRest.join(' '));
+        c.printLine(t('themeSaved', { name: themeRest.join(' ') }), 'success');
+      } else if (action === 'load' || action === 'apply' || action === 'switch') {
+        if (themeRest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
+        const name = themeRest.join(' ');
+        if (c.applyTheme(name)) c.printLine(t('themeLoaded', { name }), 'success');
+        else c.printLine(t('themeNotFound'), 'error');
+      } else if (action === 'list' || action === 'ls') {
+        const names = c.themeNames();
+        c.printList(t('themeList') + ' (' + names.length + ')', names.map(n => {
+          const th = c.getTheme(n);
+          return { name: n, meta: th ? th.fg + '  ' + th.accent : '', highlight: false };
+        }));
+      } else if (action === 'delete' || action === 'rm' || action === 'del') {
+        if (themeRest.length === 0) { c.printLine(t('themeUsage'), 'info'); return; }
+        const name = themeRest.join(' ');
+        const r = c.deleteTheme(name);
+        if (r.error === 'notFound') c.printLine(t('themeNotFound'), 'error');
+        else if (r.error === 'builtin') c.printLine(t('themeDeleteBuiltin'), 'error');
+        else c.printLine(t('themeDeleted', { name }), 'success');
+      } else if (action === 'export') {
+        const name = themeRest.join(' ') || c.themeNames()[0] || '';
+        const theme = c.exportTheme(name);
         if (!theme) { c.printLine(t('themeNotFound'), 'error'); return; }
         if (!theme['bg-img-data']) {
           const st = getStoredSettings();
@@ -1134,13 +1060,30 @@ export function registerAllCommands() {
         const result = await getBridge().readFile(filePath);
         if (hasError(result) || !result) { c.printLine(t('themeImportError'), 'error'); return; }
         try {
-          const theme = JSON.parse(result);
-          if (!theme.name) { c.printLine(t('themeImportError'), 'error'); return; }
-          c.saveCurrentTheme(theme.name);
-          c.printLine(t('syncThemeImported', { name: theme.name }), 'success');
+          const th = JSON.parse(result);
+          if (!th.name) { c.printLine(t('themeImportError'), 'error'); return; }
+          c.saveCurrentTheme(th.name);
+          c.printLine(t('syncThemeImported', { name: th.name }), 'success');
         } catch { c.printLine(t('themeImportError'), 'error'); }
+      } else if (/^\d+$/.test(action)) {
+        const idx = parseInt(action, 10) - 1;
+        const names = c.themeNames();
+        if (idx >= 0 && idx < names.length) {
+          if (c.applyTheme(names[idx])) c.printLine(t('themeLoaded', { name: names[idx] }), 'success');
+        } else c.printLine(t('themeNotFound'), 'error');
+      } else if (!action) {
+        const names = c.themeNames();
+        if (names.length === 0) { c.printLine(t('themeNotFound'), 'info'); return; }
+        c.printLine(`<cmd>${t('themeList')} (${names.length})</cmd>`, 'accent');
+        for (let i = 0; i < names.length; i++) {
+          const th = c.getTheme(names[i]);
+          const fgSpan = `<span style="color:${th?.fg ?? '#fff'}">text</span>`;
+          const accentSpan = `<span style="color:${th?.accent ?? '#888'}">accent</span>`;
+          c.printLine(`  ${i + 1}. ${names[i]}  [${fgSpan}  ${accentSpan}]`);
+        }
+        c.printLine(t('themeSwitchHint'), 'dim');
       } else {
-        c.printLine(t('syncUsage'), 'info');
+        c.printLine(t('themeUsage'), 'info');
       }
     } else {
       c.printLine(t('syncUsage'), 'info');
@@ -1190,6 +1133,13 @@ export function registerAllCommands() {
       c.printLine('Usage: audio mode [normal|asio] | audio devices', 'info');
     }
   }, 'helpAudio');
+
+  // reset
+  register('reset', [], () => {
+    const c = ctx();
+    c.resetSettings();
+    c.printLine(t('resetDone'), 'success');
+  }, 'helpReset');
 
   // quit
   register('quit', ['exit', 'q'], () => getBridge().close(), 'helpQuit');
