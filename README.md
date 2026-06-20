@@ -1,3 +1,8 @@
+# header notice
+1. this fork just add execute external command, for my own usage
+# end header notice
+
+
 # MusicLI
 
 > 拟终端风格本地音乐播放器 | Pseudo-CLI Local Music Player
