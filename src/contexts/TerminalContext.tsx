@@ -1,3 +1,4 @@
+// TerminalContext.tsx
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { OutputLine, SelectCandidate, InteractiveItem } from '../types';
 
@@ -168,6 +169,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     printRaw('    reset                 ' + t('helpReset'));
     printRaw('    clear                 ' + t('helpClear'));
     printRaw('    help                  ' + t('helpHelp'));
+    printRaw('    !exec                  ' + t('helpExec'));
     printRaw('    quit                  ' + t('helpQuit'));
     printRaw('');
   }, [printLine, printRaw]);

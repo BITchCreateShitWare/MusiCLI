@@ -30,3 +30,6 @@ out
 # Tauri
 src-tauri/target
 nul
+
+*.deb
+bun.lock

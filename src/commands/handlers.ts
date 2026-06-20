@@ -1,3 +1,4 @@
+// handlers.ts
 import { register } from './registry';
 import { t } from '../i18n';
 import { getStoredSettings } from '../contexts/SettingsContext';
@@ -1140,6 +1141,27 @@ export function registerAllCommands() {
     c.resetSettings();
     c.printLine(t('resetDone'), 'success');
   }, 'helpReset');
+
+
+  // !exec external shell command
+  register('!exec', ['exec', '!'], async (args) => {
+    const c = ctx();
+    if (args.length === 0) {
+      c.printLine('Usage: !exec <program> [args...] e.g. !exec firefox', 'info');
+      return;
+    }
+    const cmd = args.join(' ');
+    try {
+      const res = await getBridge().execExternal(cmd);
+      if (res?.error) {
+        c.printLine(`Exec failed: ${res.error}`, 'error');
+      } else {
+        c.printLine(`Launched: ${cmd}`, 'success');
+      }
+    } catch (e) {
+      c.printLine(`Exec error: ${String(e)}`, 'error');
+    }
+  }, 'helpExec');
 
   // quit
   register('quit', ['exit', 'q'], () => getBridge().close(), 'helpQuit');

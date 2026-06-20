@@ -244,4 +244,10 @@ export const tauriBridge: IBridge = {
   async listAudioDevices() {
     return await invoke<string[]>('list_audio_devices');
   },
+
+  async execExternal(cmd: string): Promise<{ error?: string }> {
+    return await invoke('exec_external', { cmd });
+  }
 };
+
+

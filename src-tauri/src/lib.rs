@@ -1,16 +1,17 @@
-mod dialog_cmd;
-mod fs_cmd;
-mod metadata_cmd;
-mod config_cmd;
-mod lrc_cmd;
-mod zip_cmd;
-mod lyrics_cmd;
-mod window_cmd;
 pub mod audio;
+mod config_cmd;
+mod dialog_cmd;
+mod exec_cmd;
+mod fs_cmd;
+mod lrc_cmd;
+mod lyrics_cmd;
+mod metadata_cmd;
+mod window_cmd;
+mod zip_cmd;
 
+use audio::engine::AudioEngine;
 use std::sync::Mutex;
 use tauri::Manager;
-use audio::engine::AudioEngine;
 
 pub struct AppState {
     pub audio_engine: Mutex<AudioEngine>,
@@ -75,6 +76,7 @@ pub fn run() {
             audio::set_audio_mode,
             audio::get_audio_mode,
             audio::list_audio_devices,
+            exec_cmd::exec_external,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -49,6 +49,8 @@ export interface IBridge {
   setAudioMode(mode: 'normal' | 'asio'): Promise<string>;
   getAudioMode(): Promise<string>;
   listAudioDevices(): Promise<string[]>;
+
+  execExternal: (cmd: string) => Promise<{ error?: string }>;
 }
 
 let _bridge: IBridge | null = null;
