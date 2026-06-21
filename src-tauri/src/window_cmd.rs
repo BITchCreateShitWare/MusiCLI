@@ -1,10 +1,20 @@
+#[allow(unused_imports)]
 use tauri::{command, AppHandle, Manager};
 
-#[command]
+#[tauri::command]
+#[cfg(desktop)] // Only compile on Windows/macOS/Linux
 pub async fn minimize_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.minimize().map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+// Empty stub for mobile (Android/iOS) to avoid missing command
+#[tauri::command]
+#[cfg(not(desktop))]
+pub async fn minimize_window(_app: AppHandle) -> Result<(), String> {
+    // Mobile has no window minimize feature, return empty ok
     Ok(())
 }
 

@@ -41,30 +41,35 @@ use std::sync::Mutex;
 
 static LAST_LYRICS_THEME: Mutex<Option<LyricsThemeData>> = Mutex::new(None);
 
-#[command]
-pub async fn show_lyrics_window(app: AppHandle) -> Result<(), String> {
+#[tauri::command]
+#[cfg(desktop)]
+pub async fn show_lyrics_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("lyrics") {
         w.show().map_err(|e| e.to_string())?;
         return Ok(());
     }
 
-    let _window = tauri::WebviewWindowBuilder::new(
-        &app,
-        "lyrics",
-        tauri::WebviewUrl::App("/#/lyrics".into()),
-    )
-    .title("Lyrics")
-    .inner_size(600.0, 400.0)
-    .min_inner_size(600.0, 80.0)
-    .max_inner_size(600.0, 10000.0)
-    .transparent(true)
-    .decorations(false)
-    .shadow(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(true)
-    .build()
-    .map_err(|e| e.to_string())?;
+    let _window = tauri::WindowBuilder::new(&app, "lyrics")
+        // 窗口基础尺寸限制
+        .inner_size(600.0, 400.0)
+        .min_inner_size(600.0, 80.0)
+        .max_inner_size(600.0, 10000.0)
+        // 原 decorations(false) 无边框
+        .decorations(false)
+        // 原 shadow(false) 关闭窗口阴影
+        .shadow(false)
+        // 置顶
+        .always_on_top(true)
+        // 不在任务栏显示
+        .skip_taskbar(true)
+        .resizable(true)
+        // 透明窗口
+        .transparent(true)
+        // 转换为 WebviewWindowBuilder，加载页面
+        .into_webview(tauri::WebviewUrl::App("/#/lyrics".into()))
+        .title("Lyrics")
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // Replay last theme after window loads
     if let Ok(guard) = LAST_LYRICS_THEME.lock() {
@@ -75,6 +80,13 @@ pub async fn show_lyrics_window(app: AppHandle) -> Result<(), String> {
         }
     }
 
+    Ok(())
+}
+
+// 移动端空存根（你已禁用Android，可保留或删除）
+#[tauri::command]
+#[cfg(not(desktop))]
+pub async fn show_lyrics_window(_app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
@@ -129,12 +141,21 @@ pub async fn lyrics_auto_size(app: AppHandle, _w: f64, h: f64) -> Result<(), Str
     Ok(())
 }
 
-#[command]
+#[tauri::command]
+#[cfg(desktop)]
 pub async fn lyrics_set_mouse_events(app: AppHandle, enabled: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("lyrics") {
+        // enabled = 允许鼠标交互 → accept_mouse_events = enabled
         window
-            .set_ignore_cursor_events(!enabled)
+            .set_accept_mouse_events(enabled)
             .map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+// 移动端空实现
+#[tauri::command]
+#[cfg(not(desktop))]
+pub async fn lyrics_set_mouse_events(_app: AppHandle, _enabled: bool) -> Result<(), String> {
     Ok(())
 }

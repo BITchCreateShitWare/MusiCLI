@@ -17,7 +17,9 @@ pub struct AppState {
     pub audio_engine: Mutex<AudioEngine>,
 }
 
-pub fn run() {
+// MOVE MACRO HERE inside lib.rs, wrap the root main function
+#[tauri::mobile_entry_point]
+fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
@@ -26,7 +28,6 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if window.label() == "main" {
-                    // Destroy floating lyrics window when main window closes.
                     if let Some(lyrics) = window.app_handle().get_webview_window("lyrics") {
                         let _ = lyrics.destroy();
                     }
